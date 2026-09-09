@@ -13,6 +13,10 @@
 
 Chi tiết kỹ thuật của luồng PDF và OCR nằm trong [PDF_PROCESSING.md](PDF_PROCESSING.md).
 
+## Chạy demo trên Google Colab
+
+Tải [Receipt_Reader_Colab.ipynb](Receipt_Reader_Colab.ipynb) lên Colab và chạy các ô từ trên xuống. Notebook sẽ tạo một link `trycloudflare.com` tạm thời.
+
 ## Chạy nhanh bằng SQLite
 
 Yêu cầu Docker Desktop đang chạy. Từ thư mục dự án:
