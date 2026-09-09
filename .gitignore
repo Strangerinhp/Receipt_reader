@@ -1,0 +1,45 @@
+# Local configuration and secrets
+.env
+backend/.env
+frontend/.env
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+tests/
+test_*.py
+.venv/
+venv/
+
+# Node / React
+frontend/node_modules/
+frontend/build/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Databases and runtime data
+backend/data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Local invoice files and generated results
+*.pdf
+*.xml
+samples/
+fixtures/
+output/
+tmp/
+
+# IDE and operating system
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local working copies
+.upstream_invoice_ocr/

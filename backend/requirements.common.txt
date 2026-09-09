@@ -1,0 +1,8 @@
+Flask>=3.1,<4
+gunicorn>=23,<24
+pypdf>=6,<7
+PyMuPDF>=1.26,<2
+Pillow>=12.2,<13
+pytesseract>=0.3.13,<1
+python-dotenv>=1.1,<2
+opencv-python-headless>=4.11,<5

@@ -1,0 +1,8 @@
+body {
+  margin: 0;
+  font-family: "Oxanium", cursive;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@import url("https://fonts.googleapis.com/css2?family=Exo+2:wght@500&family=Oxanium:wght@600&display=swap");
