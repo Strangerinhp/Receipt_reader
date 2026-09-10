@@ -296,7 +296,7 @@ def _finish(texts, tables, warnings, ocr_used):
     return document, text, list(dict.fromkeys(warnings)), ocr_used
 
 
-def read_pdf(payload: bytes, use_ocr: bool):
+def read_pdf(payload: bytes, use_ocr: bool, progress=None):
     texts, tables, warnings = [], [], []
     ocr_used = False
     try:
@@ -308,6 +308,8 @@ def read_pdf(payload: bytes, use_ocr: bool):
             raise ValueError("PDF được bảo vệ bằng mật khẩu. Hãy tải bản PDF đã mở khóa.")
         for page in pdf:
             number = page.number + 1
+            if progress:
+                progress(f"Đang đọc trang {number}/{len(pdf)}...")
             text = page.get_text(sort=True)
             if _usable_text(page, text):
                 try:
@@ -315,6 +317,8 @@ def read_pdf(payload: bytes, use_ocr: bool):
                 except Exception:
                     warnings.append(f"Trang {number}: không phân tích được bảng; đã giữ văn bản để kiểm tra.")
             elif use_ocr:
+                if progress:
+                    progress(f"Đang OCR trang {number}/{len(pdf)}...")
                 pixmap = page.get_pixmap(dpi=300, alpha=False)
                 image = Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
                 text, page_tables, page_warnings = ocr_page(image, number)
@@ -329,7 +333,7 @@ def read_pdf(payload: bytes, use_ocr: bool):
     return _finish(texts, tables, warnings, ocr_used)
 
 
-def read_image(payload: bytes):
+def read_image(payload: bytes, progress=None):
     texts, tables, warnings = [], [], []
     try:
         source = Image.open(io.BytesIO(payload))
@@ -337,6 +341,8 @@ def read_image(payload: bytes):
         raise ValueError("Không thể đọc input này như một ảnh.") from exc
     with source:
         for number, frame in enumerate(ImageSequence.Iterator(source), 1):
+            if progress:
+                progress(f"Đang OCR ảnh {number}...")
             text, page_tables, page_warnings = ocr_page(frame.copy(), number)
             texts.append(text)
             tables.extend(page_tables)

@@ -54,10 +54,25 @@ def submit_parse_job():
 
 @api.route("/invoices/parse-jobs/<job_id>", methods=["GET"])
 def get_parse_job(job_id):
-    job = current_app.extensions["parse_jobs"].get(job_id)
+    job = current_app.extensions["parse_jobs"].get(job_id, include_result=request.args.get('summary') != '1')
     response = jsonify(job if job else {"error": "Tác vụ không tồn tại hoặc đã hết hạn. Hãy tải lại file."})
     response.headers["Cache-Control"] = "no-store"
     return response, 200 if job else 404
+
+
+@api.route("/invoices/parse-jobs/<job_id>/result", methods=["GET"])
+def get_parse_result(job_id):
+    job = current_app.extensions["parse_jobs"].get(job_id)
+    if not job:
+        return jsonify({"error": "Tác vụ không tồn tại hoặc đã hết hạn."}), 404
+    if job['status'] != 'completed':
+        return jsonify({"error": job['error'] or "Tác vụ chưa hoàn thành."}), 409
+    result = job['result']
+    if request.args.get('include_source') == '0':
+        result.pop('source_base64', None)
+    response = jsonify(result)
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 @api.route("/invoices", methods=["GET", "POST", "OPTIONS"])

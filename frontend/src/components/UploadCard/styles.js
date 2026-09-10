@@ -20,10 +20,13 @@ export const useStyles = makeStyles({
     marginTop: 20,
   },
   loader: {
-    position: "absolute",
-    top: "64%",
-    left: "50%",
-    transform: "translate(-50%, -50%)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    margin: "20px 24px 0",
+    gap: 8,
+    textAlign: "center",
+    overflowWrap: "anywhere",
   },
   fileInput: {
     display: "block",

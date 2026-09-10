@@ -47,7 +47,7 @@ def parse_xml(payload: bytes) -> tuple[dict[str, Any], str]:
     return normalize_invoice_document(parsed), text
 
 
-def parse_input(filename: str, content_type: str | None, payload: bytes, use_ocr: bool) -> dict[str, Any]:
+def parse_input(filename: str, content_type: str | None, payload: bytes, use_ocr: bool, progress=None) -> dict[str, Any]:
     if not payload:
         raise ValueError("File rỗng.")
     suffix = Path(filename).suffix.lower()
@@ -68,11 +68,11 @@ def parse_input(filename: str, content_type: str | None, payload: bytes, use_ocr
         parser_name = "JSON"
         ocr_used = False
     elif suffix == ".pdf" or mime == "application/pdf":
-        document, extracted_text, warnings, ocr_used = read_pdf(payload, use_ocr)
+        document, extracted_text, warnings, ocr_used = read_pdf(payload, use_ocr, progress=progress)
         parser_name = "PDF bố cục + OCR" if ocr_used else "PDF bố cục và bảng"
     elif mime.startswith("image/") or suffix in {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}:
         if use_ocr:
-            document, extracted_text, warnings, ocr_used = read_image(payload)
+            document, extracted_text, warnings, ocr_used = read_image(payload, progress=progress)
             parser_name = "OCR bố cục và bảng"
         else:
             extracted_text = ""
@@ -86,7 +86,7 @@ def parse_input(filename: str, content_type: str | None, payload: bytes, use_ocr
         ocr_used = False
         document = document_from_text(extracted_text)
     elif use_ocr:
-        document, extracted_text, warnings, ocr_used = read_image(payload)
+        document, extracted_text, warnings, ocr_used = read_image(payload, progress=progress)
         parser_name = "OCR bố cục và bảng"
     else:
         extracted_text = ""
