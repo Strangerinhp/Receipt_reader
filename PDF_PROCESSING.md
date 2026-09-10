@@ -351,6 +351,12 @@ Tọa độ cần được hiểu theo nguồn: `PDF table` lấy tọa độ Py
 
 ## 13. Giao diện, lưu dữ liệu và vận hành
 
+Từ 10/09/2026, giao diện gửi `POST /api/invoices/parse-jobs` và nhận HTTP 202 cùng mã tác vụ ngay sau upload. Backend chạy parser trong tiến trình con riêng (spawn), tránh dùng PyMuPDF đồng thời trong các thread. `GET /api/invoices/parse-jobs/<id>` trả trạng thái `queued`, `running`, `completed` (kèm `result`) hoặc `failed` (kèm `error`), với `Cache-Control: no-store`. Endpoint đồng bộ `/api/invoices/parse` vẫn giữ để tương thích; giao diện không dùng endpoint này.
+
+Frontend hỏi trạng thái mỗi 2 giây, timeout 20 giây cho mỗi lần hỏi. Khi mất kết nối hoặc HTTP 5xx, thử lại sau 5 giây mà không upload thêm file. Mã tác vụ lưu trong `sessionStorage` để tiếp tục theo dõi khi tải lại trang trong cùng tab/domain. Giao diện hiển thị trạng thái thực tế, không giả lập phần trăm tiến độ.
+
+Trạng thái/kết quả tạm lưu trong `parse_jobs.db` cùng thư mục SQLite hóa đơn, có thể đổi bằng `PARSE_JOBS_PATH`. Các Gunicorn worker dùng chung file này. Tối đa hai tác vụ đang chờ/chạy; vượt giới hạn trả HTTP 429. Kết quả hết hạn sau một giờ, tác vụ chưa hoàn thành hết hạn sau hai giờ; các bản ghi hết hạn được xóa khi nhận tác vụ mới. Đây là bộ chạy demo trên một máy: tiến trình con không tự khôi phục khi backend/runtime dừng; tác vụ bị gián đoạn sẽ hết hạn. Bản nháp chỉ thành hóa đơn đã lưu khi người dùng bấm lưu như trước.
+
 Frontend chuyển sang màn hình bản nháp sau khi phân tích. Cảnh báo được hiển thị cả qua thông báo và trên bản nháp. Người dùng xem PDF gốc/văn bản trích xuất, chỉnh trường rồi mới lưu.
 
 Tên đơn vị, địa chỉ, mô tả hàng, tiền bằng chữ và ngân hàng dùng ô nhiều dòng với tối đa tám dòng hiển thị. Dòng hàng có nhãn trang nguồn khi có `ExtractionSource.page`; dòng `TChat="4"` được ghi là “Ghi chú”.
@@ -361,7 +367,7 @@ Hóa đơn đã lưu không tự phân tích lại khi cập nhật mã nguồn.
 
 Các giới hạn chờ đang dùng:
 
-- Upload phân tích ở frontend: 600.000 ms.
+- Upload tạo tác vụ ở frontend: 120.000 ms; thời gian OCR không nằm trong request upload.
 - Nginx `proxy_read_timeout`: 600 giây.
 - Gunicorn timeout trong hai Dockerfile backend: 600 giây; SQLite dùng một worker, SQL Server dùng hai worker.
 - Tesseract: phần lớn lời gọi là 90 giây/lần, OSD là 15 giây/lần. Đây không phải ngân sách tổng cho cả PDF, vì mỗi trang có thể gọi OCR nhiều lần.

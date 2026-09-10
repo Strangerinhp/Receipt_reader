@@ -39,6 +39,10 @@ def create_app(test_config: dict | None = None) -> Flask:
         repository.initialize()
 
     app.register_blueprint(api, url_prefix="/api")
+    from .parse_jobs import ParseJobs
+    app.extensions["parse_jobs"] = ParseJobs(os.getenv(
+        "PARSE_JOBS_PATH", str(Path(app.config["SQLITE_DATABASE_PATH"]).parent / "parse_jobs.db")
+    ))
 
     @app.after_request
     def add_cors_headers(response):

@@ -37,6 +37,29 @@ def parse_invoice():
     return jsonify(draft)
 
 
+@api.route("/invoices/parse-jobs", methods=["POST"])
+def submit_parse_job():
+    from .parse_jobs import QueueFull
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        return jsonify({"error": "Vui lòng chọn file."}), 400
+    use_ocr = request.form.get("use_ocr", "false").lower() in {"1", "true", "yes", "on"}
+    try:
+        job_id = current_app.extensions["parse_jobs"].submit(
+            uploaded.filename, uploaded.content_type, uploaded.read(), use_ocr)
+    except QueueFull:
+        return jsonify({"error": "Đang xử lý nhiều hóa đơn. Vui lòng thử lại sau."}), 429
+    return jsonify({"id": job_id, "status": "queued"}), 202
+
+
+@api.route("/invoices/parse-jobs/<job_id>", methods=["GET"])
+def get_parse_job(job_id):
+    job = current_app.extensions["parse_jobs"].get(job_id)
+    response = jsonify(job if job else {"error": "Tác vụ không tồn tại hoặc đã hết hạn. Hãy tải lại file."})
+    response.headers["Cache-Control"] = "no-store"
+    return response, 200 if job else 404
+
+
 @api.route("/invoices", methods=["GET", "POST", "OPTIONS"])
 def invoices():
     if request.method == "OPTIONS":

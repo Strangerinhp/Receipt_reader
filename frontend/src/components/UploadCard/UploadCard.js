@@ -1,4 +1,4 @@
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Alert, FormControlLabel, Switch, Typography } from "@mui/material";
 import { BarLoader } from "react-spinners";
 import { useSnackbar } from "notistack";
@@ -12,7 +12,56 @@ const UploadCard = () => {
   const ocrCtx = useContext(OCRContext);
   const [isLoading, setIsLoading] = useState(false);
   const [useOcr, setUseOcr] = useState(false);
+  const [jobId, setJobId] = useState(() => sessionStorage.getItem("parseJobId"));
+  const [progress, setProgress] = useState("");
   const { enqueueSnackbar } = useSnackbar();
+
+  useEffect(() => {
+    if (!jobId) return;
+    let cancelled = false;
+    setIsLoading(true);
+    const poll = async () => {
+      try {
+        while (!cancelled) {
+          let job;
+          try {
+            const response = await httpRequest.get(`/invoices/parse-jobs/${jobId}`, { timeout: 20000 });
+            job = response.data;
+          } catch (error) {
+            if (cancelled) return;
+            if (error.response?.status && error.response.status < 500) throw error;
+            setProgress("Kết nối gián đoạn, đang thử lấy lại trạng thái...");
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            continue;
+          }
+          if (cancelled) return;
+          if (job.status === "completed") {
+            sessionStorage.removeItem("parseJobId");
+            setJobId(null);
+            ocrCtx.setDraft(job.result);
+            ocrCtx.setActivePage(1);
+            job.result.warnings?.forEach(warning => enqueueSnackbar(warning, { variant: "warning" }));
+            return;
+          }
+          if (job.status === "failed") throw new Error(job.error);
+          setProgress(job.status === "queued" ? "Đang chờ xử lý..." : "Đang đọc hóa đơn. Bạn không cần tải lại file.");
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          sessionStorage.removeItem("parseJobId");
+          setJobId(null);
+          enqueueSnackbar(error.response?.data?.error || error.message, { variant: "error" });
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    poll();
+    return () => { cancelled = true; };
+    // Each job owns its polling loop; context changes must not restart it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId]);
 
   const handleImageUpload = (event) => {
     const file = event.target.files?.[0] || null;
@@ -28,14 +77,13 @@ const UploadCard = () => {
     form.append("file", ocrCtx.file);
     form.append("use_ocr", String(useOcr));
     setIsLoading(true);
+    setProgress("Đang tải file lên...");
     try {
-      const response = await httpRequest.post("/invoices/parse", form, { timeout: 600000 });
-      ocrCtx.setDraft(response.data);
-      ocrCtx.setActivePage(1);
-      response.data.warnings?.forEach((warning) => enqueueSnackbar(warning, { variant: "warning" }));
+      const response = await httpRequest.post("/invoices/parse-jobs", form, { timeout: 120000 });
+      sessionStorage.setItem("parseJobId", response.data.id);
+      setJobId(response.data.id);
     } catch (error) {
-      enqueueSnackbar(error.response?.data?.error || "Không thể đọc file", { variant: "error" });
-    } finally {
+      enqueueSnackbar(error.response?.data?.error || `Không thể tải file (HTTP ${error.response?.status || "mất kết nối"}).`, { variant: "error" });
       setIsLoading(false);
     }
   };
@@ -51,6 +99,7 @@ const UploadCard = () => {
         </Typography>
         <div className={classes.input}>
           <input
+            disabled={isLoading || !!jobId}
             type="file"
             onChange={(e) => handleImageUpload(e)}
             className={classes.fileInput}
@@ -58,7 +107,7 @@ const UploadCard = () => {
           />
         </div>
         <FormControlLabel
-          control={<Switch checked={useOcr} onChange={(event) => setUseOcr(event.target.checked)} color="secondary" />}
+          control={<Switch disabled={isLoading || !!jobId} checked={useOcr} onChange={(event) => setUseOcr(event.target.checked)} color="secondary" />}
           label="Bật OCR cho PDF scan / ảnh"
         />
         <Alert severity="info" sx={{ mx: 3, textAlign: "left" }}>
@@ -67,6 +116,7 @@ const UploadCard = () => {
         {isLoading && (
           <div className={classes.loader}>
             <BarLoader color={COLORS.PRIMARY} width={150} />
+            <Typography variant="body2" sx={{ mt: 1 }}>{progress}</Typography>
           </div>
         )}
         <ButtonContained
@@ -75,7 +125,7 @@ const UploadCard = () => {
             padding: "5px 35px",
           }}
           onClick={handleParse}
-          disabled={isLoading}
+          disabled={isLoading || !!jobId}
         >
           {isLoading ? "ĐANG ĐỌC..." : "ĐỌC FILE"}
         </ButtonContained>
