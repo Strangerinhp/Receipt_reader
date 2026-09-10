@@ -39,7 +39,7 @@ LABELS = {
     "tax_total": r"Tiền thuế GTGT|Tổng tiền thuế|VAT amount|\(VAT amount\)",
     "total": r"Tổng cộng tiền thanh toán|Tổng tiền thanh toán|Tổng cộng|Total payment|\(Total payment\)",
     "words": r"Số tiền viết bằng chữ|Amount in words",
-    "authority": r"Mã của cơ quan thuế|Mã cơ quan thuế|Mã CQT",
+    "authority": r"Mã của cơ quan thuế|Mã cơ quan thuế|Mã CQT|Mã cơ quan thuế cấp",
     "rate": r"Thuế suất GTGT|Thuế suất|VAT rate",
     "other": r"MSĐVCQHVNS|Mã đơn vị quan hệ ngân sách|Căn cước công dân|Số hộ chiếu|Ghi chú|Mã tra cứu|Mã số bí mật",
 }
