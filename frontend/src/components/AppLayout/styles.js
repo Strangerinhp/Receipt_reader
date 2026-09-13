@@ -8,8 +8,8 @@ export const useStyles = makeStyles({
     backgroundColor: COLORS.GRAY_DARK,
   },
   contentWrapper: {
-    width: "100%",
-    flexGrow: 1,
+    minWidth: 0,
+    flex: "1 1 0%",
     backgroundColor: COLORS.GRAY_LIGHT,
   },
   contentWrapperExpanded: {

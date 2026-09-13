@@ -21,6 +21,7 @@ yarn-error.log*
 
 # Databases and runtime data
 backend/data/
+backend/models/
 *.db
 *.db-shm
 *.db-wal

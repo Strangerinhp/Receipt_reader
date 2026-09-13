@@ -1,6 +1,6 @@
 # Luồng xử lý hóa đơn PDF hiện tại
 
-Tài liệu cập nhật ngày 13/09/2026. Các ngưỡng bên dưới là giá trị mặc định; DPI render và ngưỡng nhị phân hóa có thể cấu hình bằng biến môi trường.
+Tài liệu cập nhật ngày 13/09/2026. Luồng Tesseract đã trở lại render 300 DPI và lọc nền cố định 170; các tùy chọn upscale/ảnh xám đã được gỡ.
 
 ## 1. Phạm vi và kiến trúc
 
@@ -31,7 +31,7 @@ flowchart TD
     I -- Không --> G{Lớp chữ đạt điều kiện?}
     G -- Có --> H[Đọc chữ và bảng bằng PyMuPDF]
     G -- Không --> J[Bỏ nội dung trang khỏi trích xuất và thêm cảnh báo]
-    I -- Có --> K[Render theo OCR_PDF_DPI và tiền xử lý ảnh]
+    I -- Có --> K[Render 300 DPI và tiền xử lý ảnh]
     K --> L{Xác định được bảng kẻ và tiêu đề?}
     L -- Có --> M[OCR theo ô, dùng STT và đường kẻ để chia hàng]
     L -- Không --> N[OCR toàn trang và dò bảng trên PDF tạm]
@@ -110,9 +110,19 @@ Nội dung nhiều dòng trong một ô được giữ đến bước ánh xạ.
 
 Ngôn ngữ chọn trong số các gói đang có: `vie+eng`, chỉ `vie`, hoặc chỉ `eng`. Không có cả hai thì báo lỗi; chỉ có tiếng Anh thì thêm cảnh báo thiếu tiếng Việt. Khi chạy trực tiếp, người dùng cài Tesseract và hai gói `vie`, `eng`; notebook Colab cài chúng tự động.
 
-`OCR_PDF_DPI` đặt DPI render PDF (150–600, mặc định 300). Có thể thử 400 với chữ/dấu nhỏ; ảnh vẫn bị giới hạn cạnh dài ở 4.500 pixel trong tiền xử lý. Đây là render lại từ PDF, không phải dùng AI tạo thêm nét. `OCR_BINARIZE_THRESHOLD` đặt ngưỡng ảnh OCR (0–255, mặc định 170); đặt 0 để giữ ảnh xám và để Tesseract tự nhị phân hóa, hữu ích khi cần so sánh khả năng giữ dấu mảnh. Giá trị sai làm tác vụ trả lỗi rõ ràng. Tọa độ bảng và DPI của PDF OCR tạm được quy đổi theo độ phân giải thực sau khi thu nhỏ.
+PDF luôn render 300 DPI. Không còn dùng `OCR_PDF_DPI` hoặc `OCR_BINARIZE_THRESHOLD`, kể cả khi máy vẫn đặt các biến cũ. Tiền xử lý Tesseract giữ hành vi trước đợt thử upscale: giới hạn cạnh dài 4.500 pixel, chỉnh nghiêng/hướng, lọc nền bằng ngưỡng 170.
 
-Hai lựa chọn này phục vụ so sánh trên hóa đơn thực, không bảo đảm tăng độ chính xác. VietOCR và PaddleOCR chưa được tích hợp; thay bộ nhận dạng cần đánh giá cả dấu tiếng Việt, số tiền và cách gán chữ về ô bảng, không chỉ văn bản toàn trang.
+### Phối hợp Tesseract + VietOCR (tùy chọn)
+
+`OCR_VIETOCR=true` bật bộ đọc bổ trợ trong `vietocr_assist.py`. Mặc định tắt; không thay thế Tesseract. Xem [OCR_MODELS.md](OCR_MODELS.md) để cài thư viện, tải model và bật chế độ này trên Windows/Colab.
+
+- Tesseract vẫn nhận diện từ, dòng, bố cục, ô bảng, STT và số liệu bằng luồng cũ.
+- VietOCR `vgg_seq2seq` đọc vùng ảnh màu đã chỉnh hướng, trước khi lọc nền. Tọa độ vùng lấy từ Tesseract; các khoảng cách lớn giữa cột và dòng dài được tách nhỏ. Đây là resize đầu vào cố định của bộ nhận dạng dòng, không phải upscale trang PDF.
+- Chỉ nhận đề xuất có xác suất model từ 0,90 trở lên và khớp toàn bộ chữ sau khi bỏ dấu. Giữ nguyên chữ hoa/thường, dấu câu và mọi token có chữ số. Không dùng xác suất VietOCR như phần trăm chính xác, không so trực tiếp với confidence Tesseract.
+- Nhánh bảng kẻ sửa chữ ngay trong kết quả từng ô, giữ vị trí hàng/cột và confidence Tesseract. Nhánh toàn trang dùng tọa độ từ trong PDF OCR tạm; chỉ áp dụng ánh xạ dấu không mâu thuẫn trong văn bản và từng hàng bảng. Từ lặp lại có các cách đọc khác nhau được giữ nguyên.
+- Thiếu thư viện/model hoặc lỗi suy luận: giữ những vùng Tesseract chưa được bổ trợ, ghi log và hiện cảnh báo. Mỗi trang báo số vùng thực tế đã đối chiếu. Không tự tải model trong lúc xử lý hóa đơn.
+- Chế độ này chưa sửa chữ/số bị Tesseract đọc nhầm hoàn toàn, từ bị thiếu hoặc vùng Tesseract bỏ sót. Dấu vẫn có thể sai; cần đối chiếu hóa đơn thực để đánh giá, không mặc định rằng hai model luôn tốt hơn một.
+
 
 ### 5.2. Chuẩn bị ảnh
 
@@ -126,7 +136,7 @@ Hai lựa chọn này phục vụ so sánh trên hóa đơn thực, không bảo
 
 Sau đó `ocr_page()` thử nhận diện hướng bằng `image_to_osd()`, timeout 15 giây. Chỉ xoay theo kết quả OSD khi `orientation_conf >= 5` và có góc xoay khác 0. Lỗi Tesseract/timeout ở bước xác định hướng được bỏ qua.
 
-Ảnh sau chỉnh hướng được dùng để dò đường kẻ. Bản dùng OCR mặc định nhị phân hóa ở ngưỡng 170; với `OCR_BINARIZE_THRESHOLD=0` giữ ảnh xám. Tách hai bản này giúp bước dò bảng vẫn còn các đường kẻ nhạt.
+Ảnh sau chỉnh hướng được dùng để dò đường kẻ. Bản dùng Tesseract nhị phân hóa ở ngưỡng cố định 170. Tách hai bản này giúp bước dò bảng vẫn còn các đường kẻ nhạt.
 
 ### 5.3. Dò đường kẻ: `_grid_lines()`
 
@@ -188,7 +198,7 @@ Nếu bảng theo ô hợp lệ:
 
 Nhánh này chạy khi không xác định được hình học bảng, không xác nhận được tiêu đề/ranh giới hàng, hoặc nhánh theo ô gặp `TesseractError`, `RuntimeError`, `ValueError` được bắt trong `ocr_page()`.
 
-Tesseract gọi `image_to_pdf_or_hocr(extension="pdf", --psm 3 --dpi <DPI hiệu dụng>)` trên ảnh đã tiền xử lý (đen/trắng hoặc xám), timeout 90 giây. DPI hiệu dụng tính lại nếu ảnh bị thu nhỏ. PDF có lớp chữ do OCR tạo ra chỉ dùng trong bộ nhớ:
+Tesseract gọi `image_to_pdf_or_hocr(extension="pdf", --psm 3 --dpi 300)` trên ảnh đen/trắng đã tiền xử lý, timeout 90 giây. PDF có lớp chữ do OCR tạo ra chỉ dùng trong bộ nhớ:
 
 1. Mở bằng PyMuPDF.
 2. Đọc chữ với `get_text(sort=True)`.
@@ -387,7 +397,7 @@ Luồng đọc ảnh dùng chung `ocr_page()` và `_finish()`; `read_image()` du
 
 - Bảng không kẻ, nhiều bảng scan trên một trang, hàng bị cắt qua trang, tiêu đề không thuộc các nhãn hỗ trợ có thể không được đọc đầy đủ.
 - Văn bản người bán/người mua dùng quy tắc chia theo nhãn và dòng; thiếu/sai nhãn có thể làm chia vùng sai. Chưa có kiểm chứng tự động cho mọi tên, địa chỉ, mã cơ quan thuế hoặc lỗi dấu tiếng Việt.
-- Bộ lọc nền mặc định 170 có thể làm mất chữ nhạt; có thể thử ảnh xám bằng cấu hình đã mô tả. Các ngưỡng hình học chưa có điều chỉnh theo từng nhà cung cấp trên giao diện.
+- Bộ lọc nền 170 có thể làm mất chữ nhạt; VietOCR tùy chọn đọc crop ảnh màu trước lọc nhưng vẫn phụ thuộc vùng Tesseract tìm được. Các ngưỡng hình học chưa có điều chỉnh theo từng nhà cung cấp trên giao diện.
 - Khi OCR tắt, không tự OCR nếu bảng không đọc được. Không có cơ chế lấy phần thiếu từ XML hay lấy header tốt hơn ở trang khác.
 - Không có cảnh báo cho mọi lỗi có thể xảy ra: chẳng hạn tổng tiền khớp vẫn không chứng minh mô tả đúng, và các dòng chưa phân loại không tham gia tổng dòng `TChat="1"`.
 - Kết quả OCR luôn là bản nháp cần đối chiếu. Số lượng có thể bị nhận nhầm dấu thập phân, chẳng hạn `224.1` thay cho `224,1`; bộ kiểm tra định dạng sẽ cảnh báo nhưng không tự sửa. Tên, mô tả và tiền bằng chữ vẫn có thể sai dấu.

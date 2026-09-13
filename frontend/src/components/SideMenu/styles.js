@@ -8,6 +8,8 @@ export const useStyles = makeStyles({
     backgroundColor: COLORS.DARKER,
     textAlign: "center",
     width: "250px",
+    flexShrink: 0,
+    overflow: "hidden",
     transition: "width 0.3s ease-in-out",
   },
   rootContainerCollapsed: {

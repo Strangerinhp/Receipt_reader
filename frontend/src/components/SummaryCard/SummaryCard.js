@@ -122,7 +122,7 @@ const SourcePreview = ({ draft }) => {
   const isPdf = draft?.content_type === "application/pdf" || draft?.filename?.toLowerCase().endsWith(".pdf");
   const isImage = draft?.content_type?.startsWith("image/");
   return (
-    <Paper elevation={3} sx={{ borderRadius: 4, overflow: "hidden", height: "calc(100vh - 190px)", minHeight: 620, display: "flex", flexDirection: "column" }}>
+    <Paper elevation={3} sx={{ borderRadius: 4, minWidth: 0, maxWidth: "100%", overflow: "hidden", height: "calc(100vh - 190px)", minHeight: 620, display: "flex", flexDirection: "column" }}>
       <Tabs value={tab} onChange={(_, value) => setTab(value)} centered sx={{ flexShrink: 0 }}>
         <Tab label="File gốc" /><Tab label={draft?.ocr_used ? "Văn bản OCR" : "Văn bản đọc được"} />
       </Tabs>
@@ -133,7 +133,7 @@ const SourcePreview = ({ draft }) => {
         {!isPdf && !isImage && <TextField multiline fullWidth minRows={24} value={draft?.extracted_text || "Không có bản xem trước."} InputProps={{ readOnly: true }} />}
       </Box>}
       {tab === 1 && <Box component="pre" tabIndex={0} aria-label="Văn bản đọc được"
-        sx={{ flex: 1, minHeight: 0, m: 0, p: 2, overflow: "scroll", scrollbarGutter: "stable", whiteSpace: "pre", fontSize: 14, lineHeight: 1.6 }}>
+        sx={{ flex: 1, minHeight: 0, minWidth: 0, m: 0, p: 2, overflowY: "scroll", overflowX: "auto", scrollbarGutter: "stable", scrollbarColor: "#888 #f1f1f1", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 14, lineHeight: 1.6 }}>
         {draft?.extracted_text || "Không đọc được văn bản."}
       </Box>}
     </Paper>
@@ -199,7 +199,7 @@ const SummaryCard = ({ dataFromDB, dataChanged, onClose }) => {
         <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
           <Chip label={draft.parser || "Đã đọc"} color="secondary" />
           <Chip label={draft.ocr_used ? "OCR đã bật" : "Không dùng OCR"} variant="outlined" />
-          <Typography variant="body2" color="text.secondary">{draft.filename}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{draft.filename}</Typography>
         </Box>
         <Box>
           {onClose && <ButtonContained onClick={onClose} style={{ marginRight: 8 }}>QUAY LẠI</ButtonContained>}
@@ -212,8 +212,8 @@ const SummaryCard = ({ dataFromDB, dataChanged, onClose }) => {
       </Box>
       {draft.warnings?.map((warning, index) => <Alert severity="warning" key={index} sx={{ mb: 1 }}>{warning}</Alert>)}
       <Grid container spacing={2}>
-        <Grid item xs={12} lg={5}><SourcePreview draft={draft} /></Grid>
-        <Grid item xs={12} lg={7}><Box className={classes.editorContainer}>
+        <Grid item xs={12} lg={5} sx={{ minWidth: 0 }}><SourcePreview draft={draft} /></Grid>
+        <Grid item xs={12} lg={7} sx={{ minWidth: 0 }}><Box className={classes.editorContainer}>
           <Section title="Thông tin chung" code="TTChung" defaultExpanded>
             <PrimitiveFields value={general} path={["TTChung"]} onChange={handleChange} exclude={["TTKhac"]} />
             <ExtraFields value={general.TTKhac} path={["TTChung", "TTKhac"]} onChange={handleChange} />

@@ -12,13 +12,13 @@ import ButtonOutlined from "../StyledComponents/ButtonOutlined";
 import { COLORS } from "../../styles/constants";
 
 const columns = [
+  { id: "series", label: "Ký hiệu hóa đơn" },
   { id: "invoiceNumber", label: "Số hóa đơn" },
   { id: "sellerName", label: "Người bán" },
   { id: "sellerTaxCode", label: "MST người bán" },
   { id: "buyerName", label: "Người mua" },
   { id: "issueDate", label: "Ngày lập" },
   { id: "grandTotal", label: "Tổng tiền" },
-  { id: "sourceFilename", label: "File nguồn" },
 ];
 
 const InvoiceTable = ({ invoiceData, openSummary, onSearch, refreshInvoiceData }) => {
@@ -54,7 +54,7 @@ const InvoiceTable = ({ invoiceData, openSummary, onSearch, refreshInvoiceData }
     <Paper sx={{ width: "100%", overflow: "hidden", mt: 4, borderRadius: 4 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, p: 2 }}>
         <SearchIcon color="action" />
-        <TextField fullWidth size="small" label="Tìm theo số HĐ, tên/MST người bán, người mua, mã CQT hoặc dữ liệu XML"
+        <TextField fullWidth size="small" label="Tìm theo ký hiệu/số HĐ, tên/MST người bán, người mua, mã CQT hoặc dữ liệu XML"
           value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} />
       </Box>
       <TableContainer sx={{ maxHeight: "calc(100vh - 230px)" }}><Table stickyHeader>
@@ -82,7 +82,7 @@ const InvoiceTable = ({ invoiceData, openSummary, onSearch, refreshInvoiceData }
         onRowsPerPageChange={(event) => { setRowsPerPage(Number(event.target.value)); setPage(0); }} />
       <Dialog open={Boolean(deleteRow)} onClose={() => setDeleteRow(null)}>
         <DialogTitle>Xóa hóa đơn</DialogTitle>
-        <DialogContent><DialogContentText>Bản ghi và file nguồn sẽ bị xóa khỏi SQL Server. Bạn có chắc không?</DialogContentText></DialogContent>
+        <DialogContent><DialogContentText>Bản ghi và file nguồn sẽ bị xóa khỏi cơ sở dữ liệu. Bạn có chắc không?</DialogContentText></DialogContent>
         <DialogActions><ButtonOutlined onClick={() => setDeleteRow(null)}>HỦY</ButtonOutlined><ButtonOutlined onClick={confirmDelete}>XÓA</ButtonOutlined></DialogActions>
       </Dialog>
     </Paper>
