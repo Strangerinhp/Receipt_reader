@@ -1,4 +1,4 @@
-"""Read native PDF geometry; OCR only pages without a usable text layer."""
+"""Read PDF text/layout or OCR every page, according to the user's choice."""
 from __future__ import annotations
 
 import io
@@ -223,12 +223,14 @@ def _ocr_ruled_table(image, geometry, page_number, pytesseract, language, config
     return table
 
 
-def ocr_page(image, page_number: int) -> tuple[str, list[dict], list[str]]:
+def ocr_page(image, page_number: int, dpi: int = 300) -> tuple[str, list[dict], list[str]]:
     pytesseract, language, config = _tesseract()
     warnings = []
     if "vie" not in language:
         warnings.append(f"Trang {page_number}: thiếu language pack vie, OCR đang dùng tiếng Anh.")
+    original_width = image.width
     image = _prepare_image(image)
+    effective_dpi = dpi * image.width / original_width
     try:
         osd = pytesseract.image_to_osd(image, config=config, output_type=pytesseract.Output.DICT, timeout=15)
         if osd.get("orientation_conf", 0) >= 5 and osd.get("rotate"):
@@ -237,11 +239,18 @@ def ocr_page(image, page_number: int) -> tuple[str, list[dict], list[str]]:
         pass  # Orientation detection is optional on sparse pages.
     geometry = _raster_cells(image)
     # Pale colored watermarks interfere with table columns; retain dark ink.
-    clean_image = ImageOps.grayscale(image).point(lambda value: 255 if value > 170 else 0).convert("RGB")
+    threshold = int(os.getenv("OCR_BINARIZE_THRESHOLD", "170"))
+    if not 0 <= threshold <= 255:
+        raise ValueError("OCR_BINARIZE_THRESHOLD phải nằm trong khoảng 0–255 (0: giữ ảnh xám).")
+    gray = ImageOps.grayscale(image)
+    clean_image = (gray.point(lambda value: 255 if value > threshold else 0) if threshold else gray).convert("RGB")
     if geometry:
         try:
             table = _ocr_ruled_table(clean_image, geometry, page_number, pytesseract, language, config, rule_image=image)
             if table:
+                # The cell reader emits coordinates at its historical 300-DPI scale.
+                factor = 300 / effective_dpi
+                table["bboxes"] = [[v * factor for v in box] for box in table["bboxes"]]
                 xs, ys = geometry
                 header = clean_image.crop((int(xs[0]), 0, int(xs[-1]), int(ys[0]) - 3))
                 footer = clean_image.crop((int(xs[0]), int(ys[-1]) + 3, int(xs[-1]), image.height))
@@ -254,7 +263,7 @@ def ocr_page(image, page_number: int) -> tuple[str, list[dict], list[str]]:
             warnings.append(f"Trang {page_number}: OCR theo ô chưa thành công, đã dùng OCR toàn trang.")
     try:
         payload = pytesseract.image_to_pdf_or_hocr(clean_image, extension="pdf", lang=language,
-                                                  config=f"{config} --psm 3 --dpi 300", timeout=90)
+                                                  config=f"{config} --psm 3 --dpi {round(effective_dpi)}", timeout=90)
     except (pytesseract.TesseractError, RuntimeError) as exc:
         raise RuntimeError(f"OCR trang {page_number} thất bại hoặc quá thời gian: {exc}") from exc
     with pymupdf.open(stream=payload, filetype="pdf") as pdf:
@@ -310,21 +319,26 @@ def read_pdf(payload: bytes, use_ocr: bool, progress=None):
             number = page.number + 1
             if progress:
                 progress(f"Đang đọc trang {number}/{len(pdf)}...")
+            if use_ocr:
+                if progress:
+                    progress(f"Đang OCR trang {number}/{len(pdf)}...")
+                dpi = int(os.getenv("OCR_PDF_DPI", "300"))
+                if not 150 <= dpi <= 600:
+                    raise ValueError("OCR_PDF_DPI phải nằm trong khoảng 150–600.")
+                pixmap = page.get_pixmap(dpi=dpi, alpha=False)
+                image = Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
+                text, page_tables, page_warnings = ocr_page(image, number, dpi=dpi)
+                tables.extend(page_tables)
+                warnings.extend(page_warnings)
+                ocr_used = True
+                texts.append(text)
+                continue
             text = page.get_text(sort=True)
             if _usable_text(page, text):
                 try:
                     tables.extend(_tables(page, number, "PDF table"))
                 except Exception:
                     warnings.append(f"Trang {number}: không phân tích được bảng; đã giữ văn bản để kiểm tra.")
-            elif use_ocr:
-                if progress:
-                    progress(f"Đang OCR trang {number}/{len(pdf)}...")
-                pixmap = page.get_pixmap(dpi=300, alpha=False)
-                image = Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
-                text, page_tables, page_warnings = ocr_page(image, number)
-                tables.extend(page_tables)
-                warnings.extend(page_warnings)
-                ocr_used = True
             else:
                 warnings.append(f"Trang {number}: lớp chữ thiếu hoặc không đủ rõ. Hãy bật OCR cho trang scan.")
                 # Retain text for review, but do not map a sparse footer as invoice data.

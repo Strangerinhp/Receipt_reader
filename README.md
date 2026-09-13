@@ -1,56 +1,73 @@
-# Receipt Reader
+# Chạy Receipt Reader trên Windows
 
-Ứng dụng đọc, kiểm tra và lưu hóa đơn điện tử Việt Nam. App hỗ trợ XML, PDF có lớp chữ, PDF dùng chữ vector, PDF scan và ảnh.
+## Chuẩn bị
 
-## Chức năng chính
+Cài Python 3.12–3.14, Node.js 22 và [Tesseract OCR](https://tesseract-ocr.github.io/tessdoc/Installation.html). Khi cài Tesseract, chọn ngôn ngữ tiếng Việt (vie) và tiếng Anh (eng).
 
-- Đọc trực tiếp dữ liệu hóa đơn XML.
-- Đọc bố cục và bảng PDF bằng PyMuPDF.
-- OCR cục bộ bằng Tesseract cho trang không có lớp chữ sử dụng được.
-- Nhận diện bảng kẻ, tách hàng hóa theo ô và ghép dữ liệu qua nhiều trang.
-- Cảnh báo ô số chưa rõ, STT thiếu hoặc trùng và tổng tiền không khớp.
-- Cho phép kiểm tra, sửa bản nháp rồi lưu vào SQLite hoặc SQL Server.
-
-Chi tiết kỹ thuật của luồng PDF và OCR nằm trong [PDF_PROCESSING.md](PDF_PROCESSING.md).
-
-## Chạy demo trên Google Colab
-
-Tải [Receipt_Reader_Colab.ipynb](Receipt_Reader_Colab.ipynb) lên Colab và chạy các ô từ trên xuống. Notebook sẽ tạo một link `trycloudflare.com` tạm thời.
-
-## Chạy nhanh bằng SQLite
-
-Yêu cầu Docker Desktop đang chạy. Từ thư mục dự án:
+Mở PowerShell tại thư mục repository và tạo môi trường Python:
 
 ```powershell
-docker-compose -f compose.sqlite.yaml up --build -d
+python -m venv .venv
 ```
 
-Mở [http://localhost:3000](http://localhost:3000). API health check ở [http://localhost:5000/api/health](http://localhost:5000/api/health).
+Chọn **một** trong hai cách chạy backend bên dưới, sau đó chạy frontend ở cửa sổ PowerShell thứ hai.
 
-Dừng app và giữ dữ liệu:
+## Lựa chọn 1: SQLite
+
+Từ thư mục repository:
 
 ```powershell
-docker-compose -f compose.sqlite.yaml down
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements.sqlite.txt
+$env:DATABASE_ENGINE = "sqlite"
+$env:SQLITE_DATABASE_PATH = "$PWD/backend/data/invoice_ocr.db"
+$env:AUTO_INIT_DB = "true"
+$env:FRONTEND_ORIGIN = "http://localhost:3000"
+$env:TESSERACT_CMD = "C:\Program Files\Tesseract-OCR\tesseract.exe"
+$env:PORT = "5000"
+.\.venv\Scripts\python.exe backend/run.py
 ```
 
-## Chạy với SQL Server
+Sửa TESSERACT_CMD nếu Tesseract được cài ở vị trí khác. Database và bảng được tạo tự động trong backend/data/.
 
-Sao chép `.env.example` thành `.env`, đặt mật khẩu SQL Server, rồi chạy:
+## Lựa chọn 2: Microsoft SQL Server
+
+Cài SQL Server và [Microsoft ODBC Driver 18 for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server). Khởi động dịch vụ SQL Server. Trong SSMS, kết nối tới instance bạn sử dụng và chạy một lần nếu chưa có database:
+
+```sql
+CREATE DATABASE InvoiceOCR;
+```
+
+Từ thư mục repository, chạy backend với Windows Authentication:
 
 ```powershell
-docker-compose up --build -d
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+$env:DATABASE_ENGINE = "sqlserver"
+$env:SQLSERVER_CONNECTION_STRING = "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=InvoiceOCR;Trusted_Connection=yes;Encrypt=yes;TrustServerCertificate=yes"
+$env:AUTO_INIT_DB = "true"
+$env:FRONTEND_ORIGIN = "http://localhost:3000"
+$env:TESSERACT_CMD = "C:\Program Files\Tesseract-OCR\tesseract.exe"
+$env:PORT = "5000"
+.\.venv\Scripts\python.exe backend/run.py
 ```
 
-SQL Server được publish tại `localhost:14330`. Schema nằm trong `backend/schema.sql`.
+Đổi SERVER=localhost thành instance thực tế, ví dụ SERVER=localhost\SQLEXPRESS. Tài khoản Windows chạy backend cần quyền đọc/ghi và tạo bảng trong InvoiceOCR. App tạo bảng tự động, không tự tạo database SQL Server.
 
-## Cấu trúc dự án
+Nếu dùng SQL Authentication, bật chế độ đăng nhập SQL Server và thay connection string trước khi chạy backend:
 
-- `backend/`: Flask API, parser hóa đơn, OCR và database repository.
-- `frontend/`: giao diện React/MUI.
-- `compose.sqlite.yaml`: cấu hình chạy SQLite.
-- `compose.yaml`: cấu hình chạy SQL Server.
-- `PDF_PROCESSING.md`: tài liệu chi tiết bộ đọc PDF.
+```powershell
+$env:SQLSERVER_CONNECTION_STRING = "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=InvoiceOCR;UID=invoice_app;PWD=YOUR_PASSWORD;Encrypt=yes;TrustServerCertificate=yes"
+```
 
-## Lưu ý
+## Chạy frontend và mở ứng dụng
 
-Kết quả OCR là bản nháp và cần được đối chiếu với file gốc trước khi lưu. Các file hóa đơn `.pdf` và `.xml` được bỏ qua bởi Git để tránh đưa dữ liệu hóa đơn lên repository.
+Mở PowerShell thứ hai tại thư mục repository:
+
+```powershell
+cd frontend
+npm.cmd ci --legacy-peer-deps --no-audit --no-fund
+$env:REACT_APP_BACKEND_URL = "http://localhost:5000/api"
+$env:PORT = "3000"
+npm.cmd start
+```
+
+Mở **http://localhost:3000**. Kiểm tra backend tại **http://localhost:5000/api/health**. Giữ hai cửa sổ PowerShell mở; nhấn Ctrl+C ở từng cửa sổ để dừng. Dữ liệu đã lưu vẫn còn sau khi dừng ứng dụng.

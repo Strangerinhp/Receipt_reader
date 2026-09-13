@@ -1,10 +1,10 @@
 # Luồng xử lý hóa đơn PDF hiện tại
 
-Tài liệu mô tả mã nguồn tại thời điểm hoàn tất sửa bộ đọc PDF, ngày 07/09/2026. Các ngưỡng bên dưới là giá trị đang dùng trong code, không phải cấu hình có thể thay đổi từ giao diện.
+Tài liệu cập nhật ngày 13/09/2026. Các ngưỡng bên dưới là giá trị mặc định; DPI render và ngưỡng nhị phân hóa có thể cấu hình bằng biến môi trường.
 
 ## 1. Phạm vi và kiến trúc
 
-App phân tích từng trang PDF. Trang có lớp chữ đủ tốt được đọc trực tiếp bằng PyMuPDF; trang thiếu lớp chữ chỉ được OCR khi người dùng bật tùy chọn OCR. Sau đó văn bản và bảng được ánh xạ vào cùng cấu trúc dữ liệu hóa đơn đang dùng cho XML.
+App phân tích từng trang PDF theo lựa chọn của người dùng. Bật OCR: mọi trang được render thành ảnh rồi nhận dạng, không đọc lớp chữ có sẵn để thay thế OCR. Tắt OCR: dùng lớp chữ và bảng PyMuPDF khi đạt điều kiện. Sau đó văn bản và bảng được ánh xạ vào cùng cấu trúc dữ liệu hóa đơn đang dùng cho XML. PyMuPDF vẫn dùng để mở/render PDF và dò bảng trên PDF tạm do Tesseract tạo ra.
 
 Toàn bộ xử lý PDF/OCR chạy cục bộ ở backend bằng PyMuPDF, Pillow, OpenCV và Tesseract. Luồng này không gọi mô hình AI, dịch vụ OCR bên ngoài, tra cứu hóa đơn hay đọc XML đi kèm để bổ sung dữ liệu.
 
@@ -22,16 +22,16 @@ Toàn bộ xử lý PDF/OCR chạy cục bộ ở backend bằng PyMuPDF, Pillow
 
 ```mermaid
 flowchart TD
-    A[Upload PDF và tùy chọn OCR] --> B[POST /api/invoices/parse]
+    A[Upload PDF và tùy chọn OCR] --> B[POST /api/invoices/parse-jobs]
     B --> C[parse_input → read_pdf]
     C --> D{PDF mở được và không yêu cầu mật khẩu?}
-    D -- Không --> E[Trả lỗi 422]
+    D -- Không --> E[Tác vụ thất bại, trả thông báo lỗi]
     D -- Có --> F[Duyệt từng trang]
-    F --> G{Lớp chữ đạt điều kiện?}
+    F --> I{Người dùng bật OCR?}
+    I -- Không --> G{Lớp chữ đạt điều kiện?}
     G -- Có --> H[Đọc chữ và bảng bằng PyMuPDF]
-    G -- Không --> I{Người dùng bật OCR?}
-    I -- Không --> J[Bỏ nội dung trang khỏi trích xuất và thêm cảnh báo]
-    I -- Có --> K[Render 300 DPI và tiền xử lý ảnh]
+    G -- Không --> J[Bỏ nội dung trang khỏi trích xuất và thêm cảnh báo]
+    I -- Có --> K[Render theo OCR_PDF_DPI và tiền xử lý ảnh]
     K --> L{Xác định được bảng kẻ và tiêu đề?}
     L -- Có --> M[OCR theo ô, dùng STT và đường kẻ để chia hàng]
     L -- Không --> N[OCR toàn trang và dò bảng trên PDF tạm]
@@ -49,7 +49,7 @@ flowchart TD
 
 ## 2. Tiếp nhận file và phân luồng
 
-Frontend gửi `file` và `use_ocr` đến `POST /api/invoices/parse`. Backend hiểu các chuỗi `1`, `true`, `yes`, `on` là bật OCR; mặc định là tắt.
+Frontend gửi `file` và `use_ocr` đến `POST /api/invoices/parse-jobs`, nhận mã tác vụ rồi hỏi trạng thái và tải kết quả như mô tả ở mục 13. Backend hiểu các chuỗi `1`, `true`, `yes`, `on` là bật OCR; mặc định là tắt. Endpoint đồng bộ `/api/invoices/parse` vẫn giữ để tương thích.
 
 `parse_input(filename, content_type, payload, use_ocr)` từ chối file rỗng. Các nhánh được xét theo thứ tự XML, JSON, PDF, ảnh, văn bản, rồi định dạng khác. Nhánh PDF được chọn khi phần mở rộng là `.pdf` hoặc MIME là `application/pdf`, sau các nhánh XML/JSON. MIME dùng giá trị được truyền vào trước, rồi mới đoán từ tên file.
 
@@ -59,7 +59,7 @@ API phân tích chỉ trả bản nháp, chưa ghi hóa đơn vào database. Thi
 
 ## 3. Quyết định dùng lớp chữ hay OCR cho từng trang
 
-`read_pdf()` gọi `page.get_text(sort=True)`, sau đó `_usable_text()` kiểm tra:
+`read_pdf()` kiểm tra `use_ocr` trước. Khi bật, render tất cả các trang rồi gọi `ocr_page()`; không gọi `_usable_text()` để bỏ qua OCR. Chỉ khi OCR tắt mới gọi `page.get_text(sort=True)` và `_usable_text()` kiểm tra:
 
 | Điều kiện | Kết quả |
 | --- | --- |
@@ -71,11 +71,11 @@ API phân tích chỉ trả bản nháp, chưa ghi hóa đơn vào database. Thi
 
 Đây là bộ điều kiện sơ bộ, không chứng minh lớp chữ phản ánh đầy đủ và đúng hình ảnh PDF.
 
-- Nếu đạt: luôn dùng lớp chữ, kể cả khi OCR đang bật.
-- Nếu không đạt và OCR bật: render riêng trang đó ở 300 DPI rồi gọi `ocr_page()`.
+- Nếu OCR bật: mọi trang đều được OCR, mặc định render 300 DPI.
+- Nếu OCR tắt và lớp chữ đạt: dùng lớp chữ.
 - Nếu không đạt và OCR tắt: thêm cảnh báo theo số trang và đặt văn bản trang thành chuỗi rỗng. Code hiện tại không giữ phần chữ thưa đó trong `extracted_text`; người dùng vẫn có file gốc để đối chiếu.
 
-Các trang được xử lý tuần tự. Một PDF có thể kết hợp trang đọc trực tiếp và trang OCR. `ocr_used` chỉ trở thành `true` khi thực sự có trang đi qua nhánh OCR; `ocr_enabled` phản ánh lựa chọn của người dùng.
+Các trang được xử lý tuần tự. `ocr_used` trở thành `true` khi thực sự có trang được OCR; `ocr_enabled` phản ánh lựa chọn của người dùng.
 
 ### Trường hợp PDF dùng chữ vector
 
@@ -100,7 +100,7 @@ rows: ma trận nội dung ô từ table.extract()
 bboxes: bounding box của từng hàng
 ```
 
-Nội dung nhiều dòng trong một ô được giữ đến bước ánh xạ. Nếu dò bảng phát sinh exception trong nhánh lớp chữ, app giữ văn bản trang và thêm cảnh báo không phân tích được bảng. Nếu chỉ không tìm thấy bảng, nhánh này không tự chạy lại OCR, ngay cả khi người dùng bật OCR.
+Nội dung nhiều dòng trong một ô được giữ đến bước ánh xạ. Nếu dò bảng phát sinh exception trong nhánh lớp chữ, app giữ văn bản trang và thêm cảnh báo không phân tích được bảng. Nhánh này chỉ chạy khi OCR tắt; không tự chuyển sang OCR khi không tìm thấy bảng.
 
 ## 5. Tiền xử lý và nhận diện cấu trúc trang scan
 
@@ -108,7 +108,11 @@ Nội dung nhiều dòng trong một ô được giữ đến bước ánh xạ.
 
 `_tesseract()` ưu tiên `TESSERACT_CMD` nếu được cấu hình. Nếu thư mục `backend/tessdata` tồn tại, thư mục này được dùng làm nguồn language pack.
 
-Ngôn ngữ chọn trong số các gói đang có: `vie+eng`, chỉ `vie`, hoặc chỉ `eng`. Không có cả hai thì báo lỗi; chỉ có tiếng Anh thì thêm cảnh báo thiếu tiếng Việt. Dockerfile cài Tesseract và hai gói `vie`, `eng`.
+Ngôn ngữ chọn trong số các gói đang có: `vie+eng`, chỉ `vie`, hoặc chỉ `eng`. Không có cả hai thì báo lỗi; chỉ có tiếng Anh thì thêm cảnh báo thiếu tiếng Việt. Khi chạy trực tiếp, người dùng cài Tesseract và hai gói `vie`, `eng`; notebook Colab cài chúng tự động.
+
+`OCR_PDF_DPI` đặt DPI render PDF (150–600, mặc định 300). Có thể thử 400 với chữ/dấu nhỏ; ảnh vẫn bị giới hạn cạnh dài ở 4.500 pixel trong tiền xử lý. Đây là render lại từ PDF, không phải dùng AI tạo thêm nét. `OCR_BINARIZE_THRESHOLD` đặt ngưỡng ảnh OCR (0–255, mặc định 170); đặt 0 để giữ ảnh xám và để Tesseract tự nhị phân hóa, hữu ích khi cần so sánh khả năng giữ dấu mảnh. Giá trị sai làm tác vụ trả lỗi rõ ràng. Tọa độ bảng và DPI của PDF OCR tạm được quy đổi theo độ phân giải thực sau khi thu nhỏ.
+
+Hai lựa chọn này phục vụ so sánh trên hóa đơn thực, không bảo đảm tăng độ chính xác. VietOCR và PaddleOCR chưa được tích hợp; thay bộ nhận dạng cần đánh giá cả dấu tiếng Việt, số tiền và cách gán chữ về ô bảng, không chỉ văn bản toàn trang.
 
 ### 5.2. Chuẩn bị ảnh
 
@@ -122,7 +126,7 @@ Ngôn ngữ chọn trong số các gói đang có: `vie+eng`, chỉ `vie`, hoặ
 
 Sau đó `ocr_page()` thử nhận diện hướng bằng `image_to_osd()`, timeout 15 giây. Chỉ xoay theo kết quả OSD khi `orientation_conf >= 5` và có góc xoay khác 0. Lỗi Tesseract/timeout ở bước xác định hướng được bỏ qua.
 
-Ảnh sau chỉnh hướng được dùng để dò đường kẻ. Một bản khác dùng để OCR được chuyển thành đen/trắng: mức xám trên 170 thành trắng, phần còn lại thành đen. Tách hai bản này giúp bước OCR giảm nền hoa văn mà bước dò bảng vẫn còn các đường kẻ nhạt.
+Ảnh sau chỉnh hướng được dùng để dò đường kẻ. Bản dùng OCR mặc định nhị phân hóa ở ngưỡng 170; với `OCR_BINARIZE_THRESHOLD=0` giữ ảnh xám. Tách hai bản này giúp bước dò bảng vẫn còn các đường kẻ nhạt.
 
 ### 5.3. Dò đường kẻ: `_grid_lines()`
 
@@ -184,7 +188,7 @@ Nếu bảng theo ô hợp lệ:
 
 Nhánh này chạy khi không xác định được hình học bảng, không xác nhận được tiêu đề/ranh giới hàng, hoặc nhánh theo ô gặp `TesseractError`, `RuntimeError`, `ValueError` được bắt trong `ocr_page()`.
 
-Tesseract gọi `image_to_pdf_or_hocr(extension="pdf", --psm 3 --dpi 300)` trên ảnh đen/trắng, timeout 90 giây. PDF có lớp chữ do OCR tạo ra chỉ dùng trong bộ nhớ:
+Tesseract gọi `image_to_pdf_or_hocr(extension="pdf", --psm 3 --dpi <DPI hiệu dụng>)` trên ảnh đã tiền xử lý (đen/trắng hoặc xám), timeout 90 giây. DPI hiệu dụng tính lại nếu ảnh bị thu nhỏ. PDF có lớp chữ do OCR tạo ra chỉ dùng trong bộ nhớ:
 
 1. Mở bằng PyMuPDF.
 2. Đọc chữ với `get_text(sort=True)`.
@@ -373,9 +377,9 @@ Các giới hạn chờ đang dùng:
 
 - Upload tạo tác vụ ở frontend: 120.000 ms; thời gian OCR không nằm trong request upload.
 - Nginx `proxy_read_timeout`: 600 giây.
-- Gunicorn timeout trong hai Dockerfile backend: 600 giây; SQLite dùng một worker, SQL Server dùng hai worker.
+- Chạy trực tiếp bằng `python backend/run.py`; notebook Colab dùng Gunicorn một worker, bốn thread, timeout 600 giây. OCR vẫn chạy trong tiến trình riêng.
 - Tesseract: phần lớn lời gọi là 90 giây/lần, OSD là 15 giây/lần. Đây không phải ngân sách tổng cho cả PDF, vì mỗi trang có thể gọi OCR nhiều lần.
-- Frontend healthcheck dùng `http://127.0.0.1/` để tránh lỗi phân giải `localhost` sang IPv6 trong container.
+- API healthcheck: `/api/health`.
 
 Luồng đọc ảnh dùng chung `ocr_page()` và `_finish()`; `read_image()` duyệt từng frame, nên ảnh nhiều frame có thể đi qua cùng cách gom dữ liệu. XML/JSON vẫn được parse trực tiếp; TXT/CSV chỉ đi qua bộ đọc nhãn văn bản, không qua nhận diện hình học bảng PDF.
 
@@ -383,8 +387,8 @@ Luồng đọc ảnh dùng chung `ocr_page()` và `_finish()`; `read_image()` du
 
 - Bảng không kẻ, nhiều bảng scan trên một trang, hàng bị cắt qua trang, tiêu đề không thuộc các nhãn hỗ trợ có thể không được đọc đầy đủ.
 - Văn bản người bán/người mua dùng quy tắc chia theo nhãn và dòng; thiếu/sai nhãn có thể làm chia vùng sai. Chưa có kiểm chứng tự động cho mọi tên, địa chỉ, mã cơ quan thuế hoặc lỗi dấu tiếng Việt.
-- Bộ lọc nền ngưỡng 170 có thể làm mất chữ nhạt. Các ngưỡng hình học và OCR hiện cố định, chưa có điều chỉnh theo từng nhà cung cấp trên giao diện.
-- Không có fallback từ lớp chữ đạt điều kiện sang OCR chỉ vì bảng không đọc được. Không có cơ chế lấy phần thiếu từ XML hay lấy header tốt hơn ở trang khác.
+- Bộ lọc nền mặc định 170 có thể làm mất chữ nhạt; có thể thử ảnh xám bằng cấu hình đã mô tả. Các ngưỡng hình học chưa có điều chỉnh theo từng nhà cung cấp trên giao diện.
+- Khi OCR tắt, không tự OCR nếu bảng không đọc được. Không có cơ chế lấy phần thiếu từ XML hay lấy header tốt hơn ở trang khác.
 - Không có cảnh báo cho mọi lỗi có thể xảy ra: chẳng hạn tổng tiền khớp vẫn không chứng minh mô tả đúng, và các dòng chưa phân loại không tham gia tổng dòng `TChat="1"`.
 - Kết quả OCR luôn là bản nháp cần đối chiếu. Số lượng có thể bị nhận nhầm dấu thập phân, chẳng hạn `224.1` thay cho `224,1`; bộ kiểm tra định dạng sẽ cảnh báo nhưng không tự sửa. Tên, mô tả và tiền bằng chữ vẫn có thể sai dấu.
 - Bộ đọc không xác minh chữ ký số hoặc tính hợp lệ pháp lý của hóa đơn. `DSCKS` của nhánh PDF giữ cấu trúc mặc định.

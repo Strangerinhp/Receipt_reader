@@ -122,17 +122,20 @@ const SourcePreview = ({ draft }) => {
   const isPdf = draft?.content_type === "application/pdf" || draft?.filename?.toLowerCase().endsWith(".pdf");
   const isImage = draft?.content_type?.startsWith("image/");
   return (
-    <Paper elevation={3} sx={{ borderRadius: 4, overflow: "hidden", height: "calc(100vh - 190px)", minHeight: 620 }}>
-      <Tabs value={tab} onChange={(_, value) => setTab(value)} centered>
+    <Paper elevation={3} sx={{ borderRadius: 4, overflow: "hidden", height: "calc(100vh - 190px)", minHeight: 620, display: "flex", flexDirection: "column" }}>
+      <Tabs value={tab} onChange={(_, value) => setTab(value)} centered sx={{ flexShrink: 0 }}>
         <Tab label="File gốc" /><Tab label={draft?.ocr_used ? "Văn bản OCR" : "Văn bản đọc được"} />
       </Tabs>
       <Divider />
-      {tab === 0 && <Box sx={{ height: "calc(100% - 49px)", bgcolor: "#f5f5f5", overflow: "auto", p: isImage ? 2 : 0 }}>
+      {tab === 0 && <Box sx={{ flex: 1, minHeight: 0, bgcolor: "#f5f5f5", overflow: "auto", p: isImage ? 2 : 0 }}>
         {isPdf && sourceUrl && <iframe title="Hóa đơn PDF" src={sourceUrl} style={{ width: "100%", height: "100%", border: 0 }} />}
         {isImage && sourceUrl && <img src={sourceUrl} alt="Hóa đơn" style={{ width: "100%", height: "auto" }} />}
         {!isPdf && !isImage && <TextField multiline fullWidth minRows={24} value={draft?.extracted_text || "Không có bản xem trước."} InputProps={{ readOnly: true }} />}
       </Box>}
-      {tab === 1 && <TextField multiline fullWidth value={draft?.extracted_text || "Không đọc được văn bản."} minRows={26} InputProps={{ readOnly: true }} />}
+      {tab === 1 && <Box component="pre" tabIndex={0} aria-label="Văn bản đọc được"
+        sx={{ flex: 1, minHeight: 0, m: 0, p: 2, overflow: "scroll", scrollbarGutter: "stable", whiteSpace: "pre", fontSize: 14, lineHeight: 1.6 }}>
+        {draft?.extracted_text || "Không đọc được văn bản."}
+      </Box>}
     </Paper>
   );
 };
@@ -203,7 +206,7 @@ const SummaryCard = ({ dataFromDB, dataChanged, onClose }) => {
           <Tooltip title="Tải file gốc"><span><IconButton onClick={downloadSource} disabled={!draft.source_base64}><DownloadIcon /></IconButton></span></Tooltip>
           <Tooltip title="Mở file gốc"><span><IconButton onClick={openSource} disabled={!draft.source_base64}><OpenInNewIcon /></IconButton></span></Tooltip>
           <ButtonContained onClick={handleSave} disabled={saving} style={{ marginLeft: 8 }}>
-            <SaveIcon sx={{ mr: 0.5 }} /> {saving ? "ĐANG LƯU" : dataFromDB ? "CẬP NHẬT" : "LƯU SQL SERVER"}
+            <SaveIcon sx={{ mr: 0.5 }} /> {saving ? "ĐANG LƯU" : dataFromDB ? "CẬP NHẬT" : "LƯU HÓA ĐƠN"}
           </ButtonContained>
         </Box>
       </Box>

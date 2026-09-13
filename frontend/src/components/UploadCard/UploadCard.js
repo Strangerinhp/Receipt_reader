@@ -148,10 +148,10 @@ const UploadCard = () => {
         </div>
         <FormControlLabel
           control={<Switch disabled={isLoading || !!jobId} checked={useOcr} onChange={(event) => setUseOcr(event.target.checked)} color="secondary" />}
-          label="Bật OCR cho PDF scan / ảnh"
+          label="Dùng OCR cho toàn bộ PDF / ảnh"
         />
         <Alert severity="info" sx={{ mx: 3, textAlign: "left" }}>
-          XML được đọc trực tiếp. PDF được đọc theo bố cục và bảng; khi bật OCR, chỉ các trang thiếu lớp chữ rõ ràng mới cần nhận dạng ảnh.
+          XML được đọc trực tiếp. Bật OCR để nhận dạng mọi trang PDF từ hình ảnh, kể cả PDF có lớp chữ. Tắt OCR để lấy chữ và bảng có sẵn trong PDF.
         </Alert>
         {(isLoading || paused) && (
           <div className={classes.loader} role="status" aria-live="polite">
