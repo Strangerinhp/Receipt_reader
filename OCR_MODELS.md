@@ -1,39 +1,36 @@
-# Tesseract và VietOCR
+# Tesseract best
 
-Tesseract vẫn là bộ OCR chính. Luồng mặc định đã trở lại render PDF 300 DPI và lọc nền ngưỡng 170; không dùng các tùy chọn tăng DPI/ảnh xám của đợt thử trước. Bật OCR trên giao diện luôn OCR mọi trang PDF, kể cả trang có lớp chữ.
+App dùng `vie.traineddata` và `eng.traineddata` từ [tessdata_best chính thức](https://github.com/tesseract-ocr/tessdata_best), với chế độ LSTM (`--oem 1`). Model `osd` chỉ dùng để nhận diện hướng trang, chạy riêng bằng `--oem 0`.
 
-## Chế độ phối hợp
+Model được ghim ở commit `e12c65a915945e4c28e237a9b52bc4a8f39a0cec`. Bộ tải còn lấy `configs/pdf` và `pdf.ttf` từ Tesseract 5.3.4 để nhánh OCR toàn trang xuất được PDF có lớp chữ. Bộ tải và backend cùng kiểm tra SHA-256 của cả năm file trong `backend/app/tesseract_models.py`, bảo đảm local và Colab dùng cùng trọng số. Thiếu hoặc sai file sẽ báo lỗi; không tự chuyển sang gói `fast` của hệ thống.
 
-Chế độ tùy chọn dùng Tesseract để tìm dòng, từ, ô bảng và đọc số liệu; VietOCR `vgg_seq2seq` đọc lại crop ảnh màu trước lọc nền. Model được tải về máy và chạy tại máy, không gửi hóa đơn đến dịch vụ bên ngoài.
+## Local
 
-Đề xuất VietOCR chỉ được dùng khi xác suất model ≥ 0,90 và khớp các chữ sau khi bỏ dấu. Chỉ sửa dấu; giữ chữ hoa/thường, dấu câu và token chứa chữ số (số tiền, MST, ký hiệu có số…). Không so trực tiếp confidence của hai model. Trường hợp Tesseract bỏ sót vùng hoặc nhận nhầm chữ hoàn toàn vẫn cần sửa tay. Các từ lặp lại có cách đọc mâu thuẫn được giữ nguyên trong nhánh văn bản toàn trang.
-
-Đây là chế độ thử nghiệm để đối chiếu trên hóa đơn thực, không bảo đảm luôn tốt hơn Tesseract. Kết quả vẫn cần kiểm tra tên, địa chỉ, mô tả và số liệu. Cảnh báo trên bản nháp cho biết mỗi trang đã đối chiếu bao nhiêu vùng; lỗi model có cảnh báo và log, các vùng chưa được bổ trợ giữ kết quả Tesseract.
-
-## Bật trên Windows
-
-Cài và chạy backend theo README trước. Tại thư mục repository:
+Cài backend theo lựa chọn SQLite hoặc Microsoft SQL Server trong README, rồi tải model:
 
 ```powershell
-$env:PYTHONUTF8 = "1"
-.\.venv\Scripts\python.exe -m pip install -r backend/requirements.vietocr.txt
-.\.venv\Scripts\python.exe backend/setup_vietocr.py
-$env:OCR_VIETOCR = "true"
-$env:VIETOCR_DEVICE = "auto"
+.\.venv\Scripts\python.exe backend/setup_tesseract.py
 ```
 
-Sau đó chạy lại lệnh backend của lựa chọn SQLite hoặc SQL Server trong **cùng cửa sổ PowerShell**. `auto` chọn GPU CUDA nếu PyTorch hỗ trợ, nếu không dùng CPU. Có thể đặt `VIETOCR_DEVICE=cpu` để so sánh. Trọng số nằm trong `backend/models/vietocr/`, được gitignore; `VIETOCR_MODEL_DIR` cho phép đặt thư mục khác.
+Mặc định lưu tại `backend/models/tessdata_best/`. Có thể đặt `TESSERACT_MODEL_DIR` trước khi chạy cả setup và backend nếu muốn dùng thư mục khác. Các file model được gitignore. Tải lần đầu khoảng 38 MB; lần sau kiểm tra checksum và dùng lại file hợp lệ. Khi tải lỗi hoặc checksum không khớp, file đang có không bị ghi đè.
 
-Để so sánh Tesseract cũ, đặt `$env:OCR_VIETOCR = "false"`, khởi động lại backend rồi upload lại cùng file. Không cần xóa model. Không dùng `pip install vietocr` riêng: bản PyPI 0.3.13 ghim Pillow 10.2, không phù hợp với bộ thư viện hiện tại. File requirements dùng bản upstream đã ghim commit để tránh lỗi đó.
+Kiểm tra Tesseract thực sự đọc được bộ best:
 
-## Bật trên Colab
+```powershell
+$env:TESSERACT_CMD = "C:\Program Files\Tesseract-OCR\tesseract.exe"
+.\.venv\Scripts\python.exe backend/setup_tesseract.py --check
+```
 
-Trong `Receipt_Reader_Colab.ipynb`, đánh dấu **USE_VIETOCR** ở ô cài đặt (ô code thứ hai), rồi chạy ô đó và ô khởi động. Mặc định tắt để giữ kết quả Tesseract cũ. Model được tải và kiểm tra ở bước cài đặt; lỗi sẽ hiện trước khi mở link demo. File model nằm tại `/content/receipt_reader_models/vietocr`, còn trong cùng runtime nhưng mất khi Colab xóa runtime. GPU là tùy chọn; CPU chậm hơn.
+Sau khi cập nhật, khởi động lại backend rồi upload lại hóa đơn. Hóa đơn đã lưu không được OCR lại tự động.
 
-## Bộ tiếng Việt của Tesseract hiện tại
+## Colab
 
-App dùng `vie+eng` tìm thấy trong `backend/tessdata/` nếu thư mục đó tồn tại, hoặc bộ dữ liệu của Tesseract được cài trên máy. Không có trọng số tiếng Việt đóng gói trong repository, nên tên `vie` hay phiên bản Tesseract không chứng minh máy đang dùng bộ tốt nhất. Notebook cài gói hệ thống, không chủ động tải `tessdata_best`.
+Notebook tự tải model và chạy kiểm tra OCR trong ô cài đặt. Không cần chọn model hoặc bật GPU. Thư mục model là `/content/receipt_reader_models/tessdata_best`, tách khỏi thư mục clone để dùng lại sau khi cập nhật mã nguồn trong cùng runtime. Colab xóa runtime thì cần tải lại.
 
-Theo [tài liệu Tesseract](https://tesseract-ocr.github.io/tessdoc/Data-Files.html), `tessdata_fast` ưu tiên tốc độ và thường được phân phối cùng Linux; `tessdata_best` cho kết quả tốt hơn trong bộ đánh giá của tác giả nhưng chậm hơn. Điều đó không bảo đảm tốt hơn cho mọi hóa đơn tiếng Việt. Đợt sửa này giữ nguyên trọng số để không trộn thay đổi model với việc hoàn tác tiền xử lý ảnh.
+Dừng demo cũ bằng ô `STOP_DEMO`, tải notebook mới rồi chạy lần lượt ba ô code đầu. Các ô cài đặt và khởi động sử dụng cùng `TESSERACT_MODEL_DIR`.
 
-VietOCR là bộ nhận dạng dòng chữ; API chính thức nhận một crop ảnh, không tự đọc bố cục hóa đơn. Phần phối hợp Tesseract + VietOCR và quy tắc chọn dấu ở đây do app thực hiện, không phải một pipeline có sẵn được xác nhận trong VietOCR. Tham khảo [VietOCR chính thức](https://github.com/pbcquoc/vietocr) và [Predictor](https://github.com/pbcquoc/vietocr/blob/fe8c3a7fc714aec57ab81cec844eb3adf0c1636c/vietocr/tool/predictor.py).
+## Hành vi OCR
+
+Bật OCR trên giao diện sẽ nhận dạng mọi trang PDF. Ảnh vẫn render 300 DPI, giới hạn cạnh dài 4.500 pixel, chỉnh hướng/nghiêng và lọc nền ngưỡng 170. Tesseract đọc toàn bộ chữ và ô bảng; các bước ánh xạ trường, kiểm tra số liệu và hiển thị vẫn theo [PDF_PROCESSING.md](PDF_PROCESSING.md).
+
+Theo [tài liệu Tesseract](https://tesseract-ocr.github.io/tessdoc/Data-Files.html), bộ best ưu tiên độ chính xác và chạy chậm hơn bộ fast. Điều này không bảo đảm đọc đúng mọi dấu hoặc bảng của hóa đơn; cần đối chiếu kết quả với file gốc.

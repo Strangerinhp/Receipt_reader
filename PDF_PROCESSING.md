@@ -1,12 +1,12 @@
 # Luồng xử lý hóa đơn PDF hiện tại
 
-Tài liệu cập nhật ngày 13/09/2026. Luồng Tesseract đã trở lại render 300 DPI và lọc nền cố định 170; các tùy chọn upscale/ảnh xám đã được gỡ.
+Tài liệu cập nhật ngày 15/09/2026. OCR dùng Tesseract `tessdata_best`, render 300 DPI và lọc nền cố định 170.
 
 ## 1. Phạm vi và kiến trúc
 
 App phân tích từng trang PDF theo lựa chọn của người dùng. Bật OCR: mọi trang được render thành ảnh rồi nhận dạng, không đọc lớp chữ có sẵn để thay thế OCR. Tắt OCR: dùng lớp chữ và bảng PyMuPDF khi đạt điều kiện. Sau đó văn bản và bảng được ánh xạ vào cùng cấu trúc dữ liệu hóa đơn đang dùng cho XML. PyMuPDF vẫn dùng để mở/render PDF và dò bảng trên PDF tạm do Tesseract tạo ra.
 
-Toàn bộ xử lý PDF/OCR chạy cục bộ ở backend bằng PyMuPDF, Pillow, OpenCV và Tesseract. Luồng này không gọi mô hình AI, dịch vụ OCR bên ngoài, tra cứu hóa đơn hay đọc XML đi kèm để bổ sung dữ liệu.
+Toàn bộ xử lý PDF/OCR chạy cục bộ ở backend bằng PyMuPDF, Pillow, OpenCV và Tesseract. Luồng này dùng model Tesseract best tại máy, không gọi dịch vụ OCR bên ngoài, tra cứu hóa đơn hay đọc XML đi kèm để bổ sung dữ liệu.
 
 | File | Trách nhiệm |
 | --- | --- |
@@ -106,23 +106,11 @@ Nội dung nhiều dòng trong một ô được giữ đến bước ánh xạ.
 
 ### 5.1. Cấu hình Tesseract
 
-`_tesseract()` ưu tiên `TESSERACT_CMD` nếu được cấu hình. Nếu thư mục `backend/tessdata` tồn tại, thư mục này được dùng làm nguồn language pack.
+`_tesseract()` dùng `TESSERACT_CMD` nếu được cấu hình và chỉ đọc bộ model trong `TESSERACT_MODEL_DIR` (mặc định `backend/models/tessdata_best`). `tesseract_models.py` kiểm tra SHA-256 của `vie`, `eng`, `osd` theo phiên bản ghim từ repository chính thức, cùng `configs/pdf` và `pdf.ttf` để tạo PDF có lớp chữ. Thiếu/sai file thì báo chạy `python backend/setup_tesseract.py`; không chuyển sang language pack hệ thống hay chỉ tiếng Anh. Checksum được cache theo đường dẫn, kích thước và thời điểm sửa/thay file để tránh đọc lại toàn bộ model ở mỗi trang.
 
-Ngôn ngữ chọn trong số các gói đang có: `vie+eng`, chỉ `vie`, hoặc chỉ `eng`. Không có cả hai thì báo lỗi; chỉ có tiếng Anh thì thêm cảnh báo thiếu tiếng Việt. Khi chạy trực tiếp, người dùng cài Tesseract và hai gói `vie`, `eng`; notebook Colab cài chúng tự động.
+Mọi bước nhận dạng chữ dùng `vie+eng` và `--oem 1` (LSTM). Cột STT vẫn dùng `eng` với bộ best và danh sách ký tự số. Nhận diện hướng dùng `osd` với `--oem 0` riêng, vì model OSD dùng engine cũ. Script setup tải từng file vào thư mục tạm, kiểm tra checksum rồi mới thay thế; tải lỗi không ghi đè model cũ. `--check` chạy thêm một mẫu OCR xuất PDF và đọc lại lớp chữ để xác nhận executable cùng các file hỗ trợ hoạt động với bộ best. Notebook luôn chạy bước này; model được lưu ngoài thư mục clone và dùng lại khi còn đúng checksum. Xem [OCR_MODELS.md](OCR_MODELS.md).
 
 PDF luôn render 300 DPI. Không còn dùng `OCR_PDF_DPI` hoặc `OCR_BINARIZE_THRESHOLD`, kể cả khi máy vẫn đặt các biến cũ. Tiền xử lý Tesseract giữ hành vi trước đợt thử upscale: giới hạn cạnh dài 4.500 pixel, chỉnh nghiêng/hướng, lọc nền bằng ngưỡng 170.
-
-### Phối hợp Tesseract + VietOCR (tùy chọn)
-
-`OCR_VIETOCR=true` bật bộ đọc bổ trợ trong `vietocr_assist.py`. Mặc định tắt; không thay thế Tesseract. Xem [OCR_MODELS.md](OCR_MODELS.md) để cài thư viện, tải model và bật chế độ này trên Windows/Colab.
-
-- Tesseract vẫn nhận diện từ, dòng, bố cục, ô bảng, STT và số liệu bằng luồng cũ.
-- VietOCR `vgg_seq2seq` đọc vùng ảnh màu đã chỉnh hướng, trước khi lọc nền. Tọa độ vùng lấy từ Tesseract; các khoảng cách lớn giữa cột và dòng dài được tách nhỏ. Đây là resize đầu vào cố định của bộ nhận dạng dòng, không phải upscale trang PDF.
-- Chỉ nhận đề xuất có xác suất model từ 0,90 trở lên và khớp toàn bộ chữ sau khi bỏ dấu. Giữ nguyên chữ hoa/thường, dấu câu và mọi token có chữ số. Không dùng xác suất VietOCR như phần trăm chính xác, không so trực tiếp với confidence Tesseract.
-- Nhánh bảng kẻ sửa chữ ngay trong kết quả từng ô, giữ vị trí hàng/cột và confidence Tesseract. Nhánh toàn trang dùng tọa độ từ trong PDF OCR tạm; chỉ áp dụng ánh xạ dấu không mâu thuẫn trong văn bản và từng hàng bảng. Từ lặp lại có các cách đọc khác nhau được giữ nguyên.
-- Thiếu thư viện/model hoặc lỗi suy luận: giữ những vùng Tesseract chưa được bổ trợ, ghi log và hiện cảnh báo. Mỗi trang báo số vùng thực tế đã đối chiếu. Không tự tải model trong lúc xử lý hóa đơn.
-- Chế độ này chưa sửa chữ/số bị Tesseract đọc nhầm hoàn toàn, từ bị thiếu hoặc vùng Tesseract bỏ sót. Dấu vẫn có thể sai; cần đối chiếu hóa đơn thực để đánh giá, không mặc định rằng hai model luôn tốt hơn một.
-
 
 ### 5.2. Chuẩn bị ảnh
 
@@ -397,7 +385,7 @@ Luồng đọc ảnh dùng chung `ocr_page()` và `_finish()`; `read_image()` du
 
 - Bảng không kẻ, nhiều bảng scan trên một trang, hàng bị cắt qua trang, tiêu đề không thuộc các nhãn hỗ trợ có thể không được đọc đầy đủ.
 - Văn bản người bán/người mua dùng quy tắc chia theo nhãn và dòng; thiếu/sai nhãn có thể làm chia vùng sai. Chưa có kiểm chứng tự động cho mọi tên, địa chỉ, mã cơ quan thuế hoặc lỗi dấu tiếng Việt.
-- Bộ lọc nền 170 có thể làm mất chữ nhạt; VietOCR tùy chọn đọc crop ảnh màu trước lọc nhưng vẫn phụ thuộc vùng Tesseract tìm được. Các ngưỡng hình học chưa có điều chỉnh theo từng nhà cung cấp trên giao diện.
+- Bộ lọc nền 170 có thể làm mất chữ nhạt; bộ best không bảo đảm khôi phục được các dấu đã mất ở bước tiền xử lý. Các ngưỡng hình học chưa có điều chỉnh theo từng nhà cung cấp trên giao diện.
 - Khi OCR tắt, không tự OCR nếu bảng không đọc được. Không có cơ chế lấy phần thiếu từ XML hay lấy header tốt hơn ở trang khác.
 - Không có cảnh báo cho mọi lỗi có thể xảy ra: chẳng hạn tổng tiền khớp vẫn không chứng minh mô tả đúng, và các dòng chưa phân loại không tham gia tổng dòng `TChat="1"`.
 - Kết quả OCR luôn là bản nháp cần đối chiếu. Số lượng có thể bị nhận nhầm dấu thập phân, chẳng hạn `224.1` thay cho `224,1`; bộ kiểm tra định dạng sẽ cảnh báo nhưng không tự sửa. Tên, mô tả và tiền bằng chữ vẫn có thể sai dấu.

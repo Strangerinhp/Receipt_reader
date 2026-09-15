@@ -2,18 +2,16 @@
 from __future__ import annotations
 
 import io
-import logging
 import os
 import re
 from statistics import median
-from pathlib import Path
 
 import pymupdf
 from PIL import Image, ImageOps, ImageSequence
 
 from .invoice_tables import apply_tables, decimal_value, header_columns, validate_document
 from .invoice_text import compact, document_from_text, label_values
-from .vietocr_assist import VietOCRAssist, replace_unambiguous
+from .tesseract_models import tesseract_config
 
 
 def _tables(page, page_number: int, method: str, add_lines=None) -> list[dict]:
@@ -45,16 +43,14 @@ def _tesseract():
     import pytesseract
     if os.getenv("TESSERACT_CMD"):
         pytesseract.pytesseract.tesseract_cmd = os.environ["TESSERACT_CMD"]
-    local = Path(__file__).resolve().parents[1] / "tessdata"
-    config = f'--tessdata-dir "{local}"' if local.exists() else ""
+    config = tesseract_config()
     try:
         languages = set(pytesseract.get_languages(config=config))
     except Exception as exc:
         raise RuntimeError("Không tìm thấy Tesseract OCR. Hãy cài Tesseract và cấu hình TESSERACT_CMD.") from exc
-    language = "+".join(lang for lang in ("vie", "eng") if lang in languages)
-    if not language:
-        raise RuntimeError("Tesseract cần language pack vie hoặc eng.")
-    return pytesseract, language, config
+    if not {"vie", "eng"}.issubset(languages):
+        raise RuntimeError("Tesseract không đọc được model best vie/eng. Chạy python backend/setup_tesseract.py.")
+    return pytesseract, "vie+eng", config
 
 
 def _prepare_image(image):
@@ -139,7 +135,7 @@ def _raster_cells(image):
     return xs, ys
 
 
-def _ocr_cell_batches(image, boxes, pytesseract, language, config, hybrid=None, source_image=None):
+def _ocr_cell_batches(image, boxes, pytesseract, language, config):
     """OCR isolated cells in padded batches, keeping exact cell membership."""
     results = []
     for offset in range(0, len(boxes), 18):
@@ -153,12 +149,6 @@ def _ocr_cell_batches(image, boxes, pytesseract, language, config, hybrid=None, 
             y += crop.height + 50
         data = pytesseract.image_to_data(atlas, lang=language, config=f"{config} --psm 6 --dpi 300",
                                          output_type=pytesseract.Output.DICT, timeout=90)
-        if hybrid and hybrid.enabled:
-            raw_atlas = Image.new("RGB", atlas.size, "white")
-            for (x0, y0, x1, y1), (start, _) in zip(batch, regions):
-                crop = (source_image or image).crop((int(x0) + 4, int(y0) + 4, int(x1) - 4, int(y1) - 4))
-                raw_atlas.paste(crop, (25, start))
-            data["text"] = hybrid.refine_data(raw_atlas, data)
         cells = [[] for _ in batch]
         for i, text in enumerate(data["text"]):
             if not text.strip():
@@ -174,7 +164,7 @@ def _ocr_cell_batches(image, boxes, pytesseract, language, config, hybrid=None, 
     return results
 
 
-def _ocr_ruled_table(image, geometry, page_number, pytesseract, language, config, rule_image=None, hybrid=None):
+def _ocr_ruled_table(image, geometry, page_number, pytesseract, language, config, rule_image=None):
     xs, ys = geometry
     # Header confirmation comes first. Then STT anchors recover faint/dotted row
     # boundaries, which may be visible only in part of the description column.
@@ -220,7 +210,7 @@ def _ocr_ruled_table(image, geometry, page_number, pytesseract, language, config
         tail = [y for y in ys if y > anchors[-1] + 5]
         ys = [*ys[:2 if formula else 1], start, *boundaries, *tail]
     boxes = [(x0, y0, x1, y1) for y0, y1 in zip(ys, ys[1:]) for x0, x1 in zip(xs, xs[1:])]
-    cells = _ocr_cell_batches(image, boxes, pytesseract, language, config, hybrid=hybrid, source_image=rule_image)
+    cells = _ocr_cell_batches(image, boxes, pytesseract, language, config)
     rows = [[cell[0] for cell in cells[i:i + columns]] for i in range(0, len(cells), columns)]
     # Keep the result only when OCR confirms that the grid is an invoice table.
     if not any(header_columns(row) for row in rows[:2]):
@@ -231,29 +221,12 @@ def _ocr_ruled_table(image, geometry, page_number, pytesseract, language, config
     return table
 
 
-def _ocr_region(image, raw_image, pytesseract, language, config, psm, hybrid):
-    text = pytesseract.image_to_string(image, lang=language, config=f"{config} --psm {psm}", timeout=90)
-    if hybrid.enabled and not hybrid.failed:
-        try:
-            data = pytesseract.image_to_data(image, lang=language, config=f"{config} --psm {psm}",
-                                             output_type=pytesseract.Output.DICT, timeout=90)
-            corrected = hybrid.refine_data(raw_image, data)
-            text = replace_unambiguous(text, zip(data["text"], corrected))
-        except (pytesseract.TesseractError, RuntimeError):
-            logging.getLogger(__name__).exception("Could not detect text regions for VietOCR")
-            hybrid.failed = True
-    return text
-
-
 def ocr_page(image, page_number: int) -> tuple[str, list[dict], list[str]]:
     pytesseract, language, config = _tesseract()
-    hybrid = VietOCRAssist()
     warnings = []
-    if "vie" not in language:
-        warnings.append(f"Trang {page_number}: thiếu language pack vie, OCR đang dùng tiếng Anh.")
     image = _prepare_image(image)
     try:
-        osd = pytesseract.image_to_osd(image, config=config, output_type=pytesseract.Output.DICT, timeout=15)
+        osd = pytesseract.image_to_osd(image, config=tesseract_config(oem=0), output_type=pytesseract.Output.DICT, timeout=15)
         if osd.get("orientation_conf", 0) >= 5 and osd.get("rotate"):
             image = image.rotate(-int(osd["rotate"]), expand=True, fillcolor="white")
     except (pytesseract.TesseractError, RuntimeError):
@@ -263,31 +236,29 @@ def ocr_page(image, page_number: int) -> tuple[str, list[dict], list[str]]:
     clean_image = ImageOps.grayscale(image).point(lambda value: 255 if value > 170 else 0).convert("RGB")
     if geometry:
         try:
-            table = _ocr_ruled_table(clean_image, geometry, page_number, pytesseract, language, config, rule_image=image, hybrid=hybrid)
+            table = _ocr_ruled_table(clean_image, geometry, page_number, pytesseract, language, config, rule_image=image)
             if table:
                 xs, ys = geometry
                 header_box = (int(xs[0]), 0, int(xs[-1]), int(ys[0]) - 3)
                 footer_box = (int(xs[0]), int(ys[-1]) + 3, int(xs[-1]), image.height)
-                texts = [_ocr_region(clean_image.crop(header_box), image.crop(header_box), pytesseract, language, config, 3, hybrid),
+                texts = [pytesseract.image_to_string(clean_image.crop(header_box), lang=language, config=f"{config} --psm 3", timeout=90),
                          "\n".join(" | ".join(row) for row in table["rows"]),
-                         _ocr_region(clean_image.crop(footer_box), image.crop(footer_box), pytesseract, language, config, 6, hybrid)]
+                         pytesseract.image_to_string(clean_image.crop(footer_box), lang=language, config=f"{config} --psm 6", timeout=90)]
                 warnings.append(f"Trang {page_number} dùng OCR theo ô; cần đối chiếu chữ và số với ảnh gốc.")
-                return "\n".join(texts), [table], warnings + hybrid.message(page_number)
+                return "\n".join(texts), [table], warnings
         except (pytesseract.TesseractError, RuntimeError, ValueError):
             warnings.append(f"Trang {page_number}: OCR theo ô chưa thành công, đã dùng OCR toàn trang.")
     try:
         payload = pytesseract.image_to_pdf_or_hocr(clean_image, extension="pdf", lang=language,
                                                   config=f"{config} --psm 3 --dpi 300", timeout=90)
-    except (pytesseract.TesseractError, RuntimeError) as exc:
+    except (pytesseract.TesseractError, RuntimeError, OSError) as exc:
         raise RuntimeError(f"OCR trang {page_number} thất bại hoặc quá thời gian: {exc}") from exc
     with pymupdf.open(stream=payload, filetype="pdf") as pdf:
         page = pdf[0]
         text = page.get_text(sort=True)
         tables = _tables(page, page_number, "OCR table", _grid_lines(image, page))
-        if hybrid.enabled:
-            text = hybrid.refine_pdf(image, page, text, tables)
     warnings.append(f"Trang {page_number} dùng OCR; cần đối chiếu chữ và số với ảnh gốc.")
-    return text, tables, warnings + hybrid.message(page_number)
+    return text, tables, warnings
 
 
 def _finish(texts, tables, warnings, ocr_used):

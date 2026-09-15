@@ -2,7 +2,7 @@
 
 ## Chuẩn bị
 
-Cài Python 3.12–3.14, Node.js 22 và [Tesseract OCR](https://tesseract-ocr.github.io/tessdoc/Installation.html). Khi cài Tesseract, chọn ngôn ngữ tiếng Việt (vie) và tiếng Anh (eng).
+Cài Python 3.12–3.14, Node.js 22 và [Tesseract OCR 5](https://tesseract-ocr.github.io/tessdoc/Installation.html). Các lệnh bên dưới tải bộ `tessdata_best` tiếng Việt và tiếng Anh vào `backend/models/tessdata_best`; lần đầu cần Internet, những lần sau kiểm tra và dùng lại file đã tải.
 
 Mở PowerShell tại thư mục repository và tạo môi trường Python:
 
@@ -18,6 +18,7 @@ Từ thư mục repository:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r backend/requirements.sqlite.txt
+.\.venv\Scripts\python.exe backend/setup_tesseract.py
 $env:DATABASE_ENGINE = "sqlite"
 $env:SQLITE_DATABASE_PATH = "$PWD/backend/data/invoice_ocr.db"
 $env:AUTO_INIT_DB = "true"
@@ -41,6 +42,7 @@ Từ thư mục repository, chạy backend với Windows Authentication:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+.\.venv\Scripts\python.exe backend/setup_tesseract.py
 $env:DATABASE_ENGINE = "sqlserver"
 $env:SQLSERVER_CONNECTION_STRING = "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=InvoiceOCR;Trusted_Connection=yes;Encrypt=yes;TrustServerCertificate=yes"
 $env:AUTO_INIT_DB = "true"

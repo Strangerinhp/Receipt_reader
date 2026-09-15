@@ -1,6 +1,0 @@
-# Optional; install alongside requirements.sqlite.txt or requirements.txt.
-# PyPI 0.3.13 pins an old Pillow; upstream revision fixes that constraint.
-vietocr @ https://github.com/pbcquoc/vietocr/archive/fe8c3a7fc714aec57ab81cec844eb3adf0c1636c.zip
-torch>=2.6,<3
-torchvision>=0.21,<1
-PyYAML>=6,<7
