@@ -34,7 +34,7 @@ Sửa TESSERACT_CMD nếu Tesseract được cài ở vị trí khác. Database 
 Cài SQL Server và [Microsoft ODBC Driver 18 for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server). Khởi động dịch vụ SQL Server. Trong SSMS, kết nối tới instance bạn sử dụng và chạy một lần nếu chưa có database:
 
 ```sql
-CREATE DATABASE InvoiceOCR;
+CREATE DATABASE HoaDon;
 ```
 
 Từ thư mục repository, chạy backend với Windows Authentication:
@@ -42,7 +42,7 @@ Từ thư mục repository, chạy backend với Windows Authentication:
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
 $env:DATABASE_ENGINE = "sqlserver"
-$env:SQLSERVER_CONNECTION_STRING = "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=InvoiceOCR;Trusted_Connection=yes;Encrypt=yes;TrustServerCertificate=yes"
+$env:SQLSERVER_CONNECTION_STRING = "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=HoaDon;Trusted_Connection=yes;Encrypt=yes;TrustServerCertificate=yes"
 $env:AUTO_INIT_DB = "true"
 $env:FRONTEND_ORIGIN = "http://localhost:3000"
 $env:TESSERACT_CMD = "C:\Program Files\Tesseract-OCR\tesseract.exe"
@@ -50,12 +50,12 @@ $env:PORT = "5000"
 .\.venv\Scripts\python.exe backend/run.py
 ```
 
-Đổi SERVER=localhost thành instance thực tế, ví dụ SERVER=localhost\SQLEXPRESS. Tài khoản Windows chạy backend cần quyền đọc/ghi và tạo bảng trong InvoiceOCR. App tạo bảng tự động, không tự tạo database SQL Server.
+Đổi SERVER=localhost thành instance thực tế, ví dụ SERVER=localhost\SQLEXPRESS. Tài khoản Windows chạy backend cần quyền đọc/ghi và tạo bảng trong HoaDon. App tạo bảng tự động, không tự tạo database SQL Server.
 
 Nếu dùng SQL Authentication, bật chế độ đăng nhập SQL Server và thay connection string trước khi chạy backend:
 
 ```powershell
-$env:SQLSERVER_CONNECTION_STRING = "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=InvoiceOCR;UID=invoice_app;PWD=YOUR_PASSWORD;Encrypt=yes;TrustServerCertificate=yes"
+$env:SQLSERVER_CONNECTION_STRING = "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=HoaDon;UID=invoice_app;PWD=YOUR_PASSWORD;Encrypt=yes;TrustServerCertificate=yes"
 ```
 
 ## Tùy chọn Mistral OCR
@@ -66,7 +66,7 @@ SDK Mistral đã nằm trong requirements chung, không cần cài thêm file re
 $env:MISTRAL_API_KEY = "your_mistral_api_key"
 ```
 
-Hoặc thêm `MISTRAL_API_KEY=...` vào `backend/.env`. Không commit API key. Trên giao diện, Tesseract vẫn được chọn mặc định; bật OCR và chọn **Mistral OCR** khi muốn gửi file tới dịch vụ Mistral. Không có cờ bật dịch vụ riêng. Nếu chọn Mistral mà chưa có key, tác vụ sẽ báo lỗi cấu hình.
+Biến này chỉ có hiệu lực trong cửa sổ PowerShell hiện tại, nên hãy đặt nó trước lệnh chạy backend. Trên giao diện, Tesseract vẫn được chọn mặc định; bật OCR và chọn **Mistral OCR** khi muốn gửi file tới dịch vụ Mistral. Không có cờ bật dịch vụ riêng. Nếu chọn Mistral mà chưa có key, tác vụ sẽ báo lỗi cấu hình.
 
 ## Chạy frontend và mở ứng dụng
 

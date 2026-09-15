@@ -16,76 +16,76 @@ from .db_common import DatabaseUnavailable
 
 SCHEMA_STATEMENTS = [
     """
-    IF OBJECT_ID(N'dbo.Invoices', N'U') IS NULL
+    IF OBJECT_ID(N'dbo.HoaDon', N'U') IS NULL
     BEGIN
-      CREATE TABLE dbo.Invoices (
-        Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
-        SourceFilename NVARCHAR(260) NOT NULL,
-        SourceType NVARCHAR(100) NULL,
-        OcrEnabled BIT NOT NULL CONSTRAINT DF_Invoices_OcrEnabled DEFAULT 0,
-        OcrText NVARCHAR(MAX) NULL,
-        InvoiceNumber NVARCHAR(100) NULL,
-        Series NVARCHAR(100) NULL,
-        FormNumber NVARCHAR(100) NULL,
-        IssueDate DATE NULL,
-        Currency NVARCHAR(20) NULL,
-        PaymentMethod NVARCHAR(200) NULL,
-        SellerName NVARCHAR(500) NULL,
-        SellerTaxCode NVARCHAR(50) NULL,
-        BuyerName NVARCHAR(500) NULL,
-        BuyerTaxCode NVARCHAR(50) NULL,
-        Subtotal DECIMAL(19,4) NULL,
-        TaxTotal DECIMAL(19,4) NULL,
-        GrandTotal DECIMAL(19,4) NULL,
-        TaxAuthorityCode NVARCHAR(100) NULL,
-        Status NVARCHAR(40) NOT NULL CONSTRAINT DF_Invoices_Status DEFAULT N'Đã lưu',
-        DocumentJson NVARCHAR(MAX) NOT NULL,
-        SourceData VARBINARY(MAX) NULL,
-        CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_Invoices_CreatedAt DEFAULT SYSUTCDATETIME(),
-        UpdatedAt DATETIME2 NOT NULL CONSTRAINT DF_Invoices_UpdatedAt DEFAULT SYSUTCDATETIME()
+      CREATE TABLE dbo.HoaDon (
+        MaHoaDon UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+        TenFileNguon NVARCHAR(260) NOT NULL,
+        LoaiFileNguon NVARCHAR(100) NULL,
+        DaDungOCR BIT NOT NULL CONSTRAINT DF_HoaDon_DaDungOCR DEFAULT 0,
+        VanBanOCR NVARCHAR(MAX) NULL,
+        SHDon NVARCHAR(100) NULL,
+        KHHDon NVARCHAR(100) NULL,
+        KHMSHDon NVARCHAR(100) NULL,
+        NLap DATE NULL,
+        DVTTe NVARCHAR(20) NULL,
+        HTTToan NVARCHAR(200) NULL,
+        TenNguoiBan NVARCHAR(500) NULL,
+        MSTNguoiBan NVARCHAR(50) NULL,
+        TenNguoiMua NVARCHAR(500) NULL,
+        MSTNguoiMua NVARCHAR(50) NULL,
+        TgTCThue DECIMAL(19,4) NULL,
+        TgTThue DECIMAL(19,4) NULL,
+        TgTTTBSo DECIMAL(19,4) NULL,
+        MCCQT NVARCHAR(100) NULL,
+        TrangThai NVARCHAR(40) NOT NULL CONSTRAINT DF_HoaDon_TrangThai DEFAULT N'Đã lưu',
+        DuLieuHoaDon NVARCHAR(MAX) NOT NULL,
+        DuLieuFileNguon VARBINARY(MAX) NULL,
+        NgayTao DATETIME2 NOT NULL CONSTRAINT DF_HoaDon_NgayTao DEFAULT SYSUTCDATETIME(),
+        NgayCapNhat DATETIME2 NOT NULL CONSTRAINT DF_HoaDon_NgayCapNhat DEFAULT SYSUTCDATETIME()
       );
-      CREATE INDEX IX_Invoices_InvoiceNumber ON dbo.Invoices(InvoiceNumber);
-      CREATE INDEX IX_Invoices_SellerTaxCode ON dbo.Invoices(SellerTaxCode);
-      CREATE INDEX IX_Invoices_BuyerTaxCode ON dbo.Invoices(BuyerTaxCode);
-      CREATE INDEX IX_Invoices_IssueDate ON dbo.Invoices(IssueDate);
+      CREATE INDEX IX_HoaDon_SHDon ON dbo.HoaDon(SHDon);
+      CREATE INDEX IX_HoaDon_MSTNguoiBan ON dbo.HoaDon(MSTNguoiBan);
+      CREATE INDEX IX_HoaDon_MSTNguoiMua ON dbo.HoaDon(MSTNguoiMua);
+      CREATE INDEX IX_HoaDon_NLap ON dbo.HoaDon(NLap);
     END
     """,
     """
-    IF OBJECT_ID(N'dbo.InvoiceItems', N'U') IS NULL
+    IF OBJECT_ID(N'dbo.ChiTietHoaDon', N'U') IS NULL
     BEGIN
-      CREATE TABLE dbo.InvoiceItems (
-        Id BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-        InvoiceId UNIQUEIDENTIFIER NOT NULL,
-        LineNumber INT NULL,
-        ItemCode NVARCHAR(100) NULL,
-        Description NVARCHAR(MAX) NULL,
-        Unit NVARCHAR(100) NULL,
-        Quantity DECIMAL(19,4) NULL,
-        UnitPrice DECIMAL(19,4) NULL,
-        DiscountRate DECIMAL(9,4) NULL,
-        DiscountAmount DECIMAL(19,4) NULL,
-        Amount DECIMAL(19,4) NULL,
-        TaxRate NVARCHAR(30) NULL,
-        TaxAmount DECIMAL(19,4) NULL,
-        ItemJson NVARCHAR(MAX) NOT NULL,
-        CONSTRAINT FK_InvoiceItems_Invoices FOREIGN KEY (InvoiceId) REFERENCES dbo.Invoices(Id) ON DELETE CASCADE
+      CREATE TABLE dbo.ChiTietHoaDon (
+        MaDong BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaHoaDon UNIQUEIDENTIFIER NOT NULL,
+        STT INT NULL,
+        MHHDVu NVARCHAR(100) NULL,
+        THHDVu NVARCHAR(MAX) NULL,
+        DVTinh NVARCHAR(100) NULL,
+        SLuong DECIMAL(19,4) NULL,
+        DGia DECIMAL(19,4) NULL,
+        TLCKhau DECIMAL(9,4) NULL,
+        STCKhau DECIMAL(19,4) NULL,
+        ThTien DECIMAL(19,4) NULL,
+        TSuat NVARCHAR(30) NULL,
+        TThue DECIMAL(19,4) NULL,
+        DuLieuDong NVARCHAR(MAX) NOT NULL,
+        CONSTRAINT FK_ChiTietHoaDon_HoaDon FOREIGN KEY (MaHoaDon) REFERENCES dbo.HoaDon(MaHoaDon) ON DELETE CASCADE
       );
-      CREATE INDEX IX_InvoiceItems_InvoiceId ON dbo.InvoiceItems(InvoiceId);
+      CREATE INDEX IX_ChiTietHoaDon_MaHoaDon ON dbo.ChiTietHoaDon(MaHoaDon);
     END
     """,
     """
-    IF OBJECT_ID(N'dbo.InvoiceExtraFields', N'U') IS NULL
+    IF OBJECT_ID(N'dbo.TruongMoRongHoaDon', N'U') IS NULL
     BEGIN
-      CREATE TABLE dbo.InvoiceExtraFields (
-        Id BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-        InvoiceId UNIQUEIDENTIFIER NOT NULL,
-        GroupPath NVARCHAR(500) NOT NULL,
-        FieldName NVARCHAR(500) NULL,
-        DataType NVARCHAR(100) NULL,
-        FieldValue NVARCHAR(MAX) NULL,
-        CONSTRAINT FK_InvoiceExtraFields_Invoices FOREIGN KEY (InvoiceId) REFERENCES dbo.Invoices(Id) ON DELETE CASCADE
+      CREATE TABLE dbo.TruongMoRongHoaDon (
+        MaTruong BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaHoaDon UNIQUEIDENTIFIER NOT NULL,
+        DuongDanNhom NVARCHAR(500) NOT NULL,
+        TTruong NVARCHAR(500) NULL,
+        KDLieu NVARCHAR(100) NULL,
+        DLieu NVARCHAR(MAX) NULL,
+        CONSTRAINT FK_TruongMoRongHoaDon_HoaDon FOREIGN KEY (MaHoaDon) REFERENCES dbo.HoaDon(MaHoaDon) ON DELETE CASCADE
       );
-      CREATE INDEX IX_InvoiceExtraFields_InvoiceId ON dbo.InvoiceExtraFields(InvoiceId);
+      CREATE INDEX IX_TruongMoRongHoaDon_MaHoaDon ON dbo.TruongMoRongHoaDon(MaHoaDon);
     END
     """,
 ]
@@ -168,14 +168,14 @@ class InvoiceRepository:
             connection.commit()
 
     def _sync_children(self, cursor: pyodbc.Cursor, invoice_id: str, document: dict[str, Any]) -> None:
-        cursor.execute("DELETE FROM dbo.InvoiceItems WHERE InvoiceId = ?", invoice_id)
-        cursor.execute("DELETE FROM dbo.InvoiceExtraFields WHERE InvoiceId = ?", invoice_id)
+        cursor.execute("DELETE FROM dbo.ChiTietHoaDon WHERE MaHoaDon = ?", invoice_id)
+        cursor.execute("DELETE FROM dbo.TruongMoRongHoaDon WHERE MaHoaDon = ?", invoice_id)
         content = document.get("NDHDon", {})
         for index, item in enumerate(content.get("DSHHDVu", []), start=1):
             cursor.execute(
-                """INSERT INTO dbo.InvoiceItems
-                (InvoiceId, LineNumber, ItemCode, Description, Unit, Quantity, UnitPrice,
-                 DiscountRate, DiscountAmount, Amount, TaxRate, TaxAmount, ItemJson)
+                """INSERT INTO dbo.ChiTietHoaDon
+                (MaHoaDon, STT, MHHDVu, THHDVu, DVTinh, SLuong, DGia,
+                 TLCKhau, STCKhau, ThTien, TSuat, TThue, DuLieuDong)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 invoice_id,
                 _integer(item.get("STT"), index),
@@ -194,8 +194,8 @@ class InvoiceRepository:
                         for extra in child:
                             if isinstance(extra, dict):
                                 cursor.execute(
-                                    """INSERT INTO dbo.InvoiceExtraFields
-                                    (InvoiceId, GroupPath, FieldName, DataType, FieldValue)
+                                    """INSERT INTO dbo.TruongMoRongHoaDon
+                                    (MaHoaDon, DuongDanNhom, TTruong, KDLieu, DLieu)
                                     VALUES (?, ?, ?, ?, ?)""",
                                     invoice_id, path or "HDon", extra.get("TTruong"),
                                     extra.get("KDLieu"), str(extra.get("DLieu") or ""),
@@ -215,11 +215,11 @@ class InvoiceRepository:
         with self.connect() as connection:
             cursor = connection.cursor()
             cursor.execute(
-                """INSERT INTO dbo.Invoices
-                (Id, SourceFilename, SourceType, OcrEnabled, OcrText, InvoiceNumber, Series,
-                 FormNumber, IssueDate, Currency, PaymentMethod, SellerName, SellerTaxCode,
-                 BuyerName, BuyerTaxCode, Subtotal, TaxTotal, GrandTotal, TaxAuthorityCode,
-                 DocumentJson, SourceData)
+                """INSERT INTO dbo.HoaDon
+                (MaHoaDon, TenFileNguon, LoaiFileNguon, DaDungOCR, VanBanOCR, SHDon, KHHDon,
+                 KHMSHDon, NLap, DVTTe, HTTToan, TenNguoiBan, MSTNguoiBan,
+                 TenNguoiMua, MSTNguoiMua, TgTCThue, TgTThue, TgTTTBSo, MCCQT,
+                 DuLieuHoaDon, DuLieuFileNguon)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 invoice_id, draft.get("filename") or "invoice", draft.get("content_type"),
                 bool(draft.get("ocr_enabled")), draft.get("extracted_text"),
@@ -239,10 +239,10 @@ class InvoiceRepository:
         with self.connect() as connection:
             cursor = connection.cursor()
             cursor.execute(
-                """UPDATE dbo.Invoices SET InvoiceNumber=?, Series=?, FormNumber=?, IssueDate=?,
-                Currency=?, PaymentMethod=?, SellerName=?, SellerTaxCode=?, BuyerName=?, BuyerTaxCode=?,
-                Subtotal=?, TaxTotal=?, GrandTotal=?, TaxAuthorityCode=?, DocumentJson=?,
-                UpdatedAt=SYSUTCDATETIME() WHERE Id=?""",
+                """UPDATE dbo.HoaDon SET SHDon=?, KHHDon=?, KHMSHDon=?, NLap=?,
+                DVTTe=?, HTTToan=?, TenNguoiBan=?, MSTNguoiBan=?, TenNguoiMua=?, MSTNguoiMua=?,
+                TgTCThue=?, TgTThue=?, TgTTTBSo=?, MCCQT=?, DuLieuHoaDon=?,
+                NgayCapNhat=SYSUTCDATETIME() WHERE MaHoaDon=?""",
                 core["invoice_number"], core["series"], core["form_number"], _date(core["issue_date"]),
                 core["currency"], core["payment_method"], core["seller_name"], core["seller_tax_code"],
                 core["buyer_name"], core["buyer_tax_code"], _decimal(core["subtotal"]),
@@ -258,32 +258,38 @@ class InvoiceRepository:
         where = ""
         params: list[Any] = []
         if query:
-            where = """WHERE InvoiceNumber LIKE ? OR SellerName LIKE ? OR SellerTaxCode LIKE ?
-              OR BuyerName LIKE ? OR BuyerTaxCode LIKE ? OR TaxAuthorityCode LIKE ? OR DocumentJson LIKE ?"""
+            where = """WHERE SHDon LIKE ? OR TenNguoiBan LIKE ? OR MSTNguoiBan LIKE ?
+              OR TenNguoiMua LIKE ? OR MSTNguoiMua LIKE ? OR MCCQT LIKE ? OR DuLieuHoaDon LIKE ?"""
             needle = f"%{query}%"
             params = [needle] * 7
         offset = max(0, page - 1) * page_size
         with self.connect() as connection:
             cursor = connection.cursor()
-            total = cursor.execute(f"SELECT COUNT(*) FROM dbo.Invoices {where}", *params).fetchval()
+            total = cursor.execute(f"SELECT COUNT(*) FROM dbo.HoaDon {where}", *params).fetchval()
             rows = cursor.execute(
-                f"""SELECT Id, SourceFilename, SourceType, OcrEnabled, InvoiceNumber, Series,
-                IssueDate, Currency, SellerName, SellerTaxCode, BuyerName, BuyerTaxCode,
-                GrandTotal, Status, CreatedAt, UpdatedAt
-                FROM dbo.Invoices {where}
-                ORDER BY CreatedAt DESC OFFSET ? ROWS FETCH NEXT ? ROWS ONLY""",
+                f"""SELECT MaHoaDon AS Id, TenFileNguon AS SourceFilename,
+                LoaiFileNguon AS SourceType, DaDungOCR AS OcrEnabled, SHDon AS InvoiceNumber,
+                KHHDon AS Series, NLap AS IssueDate, DVTTe AS Currency,
+                TenNguoiBan AS SellerName, MSTNguoiBan AS SellerTaxCode,
+                TenNguoiMua AS BuyerName, MSTNguoiMua AS BuyerTaxCode,
+                TgTTTBSo AS GrandTotal, TrangThai AS Status, NgayTao AS CreatedAt,
+                NgayCapNhat AS UpdatedAt
+                FROM dbo.HoaDon {where}
+                ORDER BY NgayTao DESC OFFSET ? ROWS FETCH NEXT ? ROWS ONLY""",
                 *params, offset, page_size,
             ).fetchall()
             columns = [description[0] for description in cursor.description]
         return {"items": [self._serialize(dict(zip(columns, row))) for row in rows], "total": total}
 
     def get(self, invoice_id: str, include_source: bool = True) -> dict[str, Any] | None:
-        source_column = ", SourceData" if include_source else ""
+        source_column = ", DuLieuFileNguon AS SourceData" if include_source else ""
         with self.connect() as connection:
             cursor = connection.cursor()
             row = cursor.execute(
-                f"""SELECT Id, SourceFilename, SourceType, OcrEnabled, OcrText, Status,
-                DocumentJson, CreatedAt, UpdatedAt{source_column} FROM dbo.Invoices WHERE Id=?""",
+                f"""SELECT MaHoaDon AS Id, TenFileNguon AS SourceFilename,
+                LoaiFileNguon AS SourceType, DaDungOCR AS OcrEnabled, VanBanOCR AS OcrText,
+                TrangThai AS Status, DuLieuHoaDon AS DocumentJson, NgayTao AS CreatedAt,
+                NgayCapNhat AS UpdatedAt{source_column} FROM dbo.HoaDon WHERE MaHoaDon=?""",
                 invoice_id,
             ).fetchone()
             if not row:
@@ -298,7 +304,7 @@ class InvoiceRepository:
     def delete(self, invoice_id: str) -> bool:
         with self.connect() as connection:
             cursor = connection.cursor()
-            cursor.execute("DELETE FROM dbo.Invoices WHERE Id=?", invoice_id)
+            cursor.execute("DELETE FROM dbo.HoaDon WHERE MaHoaDon=?", invoice_id)
             deleted = cursor.rowcount > 0
             connection.commit()
         return deleted

@@ -1,7 +1,4 @@
-# Local configuration and secrets
-.env
-backend/.env
-frontend/.env
+# Local credentials
 credentials/
 *-service-account.json
 application_default_credentials.json

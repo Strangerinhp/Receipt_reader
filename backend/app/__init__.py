@@ -4,14 +4,12 @@ import os
 from pathlib import Path
 
 from flask import Flask, jsonify
-from dotenv import load_dotenv
 
 from .db_common import DatabaseUnavailable
 from .routes import api
 
 
 def create_app(test_config: dict | None = None) -> Flask:
-    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     app = Flask(__name__)
     app.config.from_mapping(
         MAX_CONTENT_LENGTH=int(os.getenv("MAX_UPLOAD_MB", "25")) * 1024 * 1024,
