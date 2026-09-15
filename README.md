@@ -2,7 +2,7 @@
 
 ## Chuẩn bị
 
-Cài Python 3.12–3.14, Node.js 22 và [Tesseract OCR 5](https://tesseract-ocr.github.io/tessdoc/Installation.html). Khi cài Tesseract, chọn gói ngôn ngữ Vietnamese (`vie`) và English (`eng`).
+Cài Python 3.12–3.14 và Node.js 22. Nếu dùng Tesseract, cài [Tesseract OCR 5](https://tesseract-ocr.github.io/tessdoc/Installation.html) cùng gói ngôn ngữ Vietnamese (`vie`) và English (`eng`). Nếu chỉ dùng Google Cloud Vision, làm thêm bước cấu hình Vision bên dưới.
 
 Mở PowerShell tại thư mục repository và tạo môi trường Python:
 
@@ -57,6 +57,18 @@ Nếu dùng SQL Authentication, bật chế độ đăng nhập SQL Server và t
 ```powershell
 $env:SQLSERVER_CONNECTION_STRING = "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost;DATABASE=InvoiceOCR;UID=invoice_app;PWD=YOUR_PASSWORD;Encrypt=yes;TrustServerCertificate=yes"
 ```
+
+## Tùy chọn chạy OCR bằng Google Cloud Vision
+
+Áp dụng cho cả SQLite và SQL Server. Cấu hình quyền Google Cloud theo [GOOGLE_VISION.md](GOOGLE_VISION.md), rồi chạy các lệnh sau trong cửa sổ backend trước khi chạy `backend/run.py`:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements.vision.txt
+$env:GOOGLE_VISION_ENABLED = "true"
+$env:GOOGLE_APPLICATION_CREDENTIALS = "C:\private\vision-service-account.json"
+```
+
+Trên giao diện, bật OCR rồi chọn **Google Cloud Vision**. Engine này chạy độc lập, không cần Tesseract để nhận dạng. Bỏ qua cấu hình này nếu chỉ dùng Tesseract.
 
 ## Chạy frontend và mở ứng dụng
 

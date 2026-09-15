@@ -28,7 +28,9 @@ class ParseJobs:
         db.execute('CREATE TABLE IF NOT EXISTS job_progress (id TEXT PRIMARY KEY, heartbeat REAL, message TEXT)')
         return db
 
-    def submit(self, filename, content_type, payload, use_ocr):
+    def submit(self, filename, content_type, payload, use_ocr, ocr_engine="tesseract"):
+        from .google_vision import validate_request
+        validate_request(use_ocr, ocr_engine)
         job_id = uuid.uuid4().hex
         db = self.connect()
         try:
@@ -48,7 +50,7 @@ class ParseJobs:
             # PyMuPDF must not be used concurrently from Python threads.
             process = multiprocessing.get_context("spawn").Process(
                 target=run_job,
-                args=(self.path, job_id, filename, content_type, payload, use_ocr),
+                args=(self.path, job_id, filename, content_type, payload, use_ocr, ocr_engine),
                 daemon=True,
             )
             process.start()
@@ -107,12 +109,13 @@ class ParseJobs:
         finally:
             db.close()
 
-    def run(self, job_id, filename, content_type, payload, use_ocr):
+    def run(self, job_id, filename, content_type, payload, use_ocr, ocr_engine="tesseract"):
         try:
             self.update(job_id, 'running')
             logging.getLogger(__name__).warning('OCR job %s started (pid %s)', job_id, os.getpid())
             result = parse_input(filename, content_type, payload, use_ocr,
-                                 progress=lambda message: self.report(job_id, message))
+                                 progress=lambda message: self.report(job_id, message),
+                                 ocr_engine=ocr_engine)
             self.update(job_id, 'completed', result=result)
             logging.getLogger(__name__).warning('OCR job %s completed', job_id)
         except (ValueError, RuntimeError) as exc:
@@ -141,9 +144,9 @@ class ParseJobs:
         return job
 
 
-def run_job(path, job_id, filename, content_type, payload, use_ocr):
+def run_job(path, job_id, filename, content_type, payload, use_ocr, ocr_engine="tesseract"):
     # Prevent Tesseract/OpenCV oversubscribing the small Colab CPU allocation.
     os.environ.setdefault('OMP_THREAD_LIMIT', '1')
     import cv2
     cv2.setNumThreads(1)
-    ParseJobs(path).run(job_id, filename, content_type, payload, use_ocr)
+    ParseJobs(path).run(job_id, filename, content_type, payload, use_ocr, ocr_engine)

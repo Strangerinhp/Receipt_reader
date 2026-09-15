@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef, useState } from "react";
-import { Alert, FormControlLabel, Switch, Typography } from "@mui/material";
+import { Alert, FormControlLabel, Switch, TextField, MenuItem, Typography } from "@mui/material";
 import { BarLoader } from "react-spinners";
 import { useSnackbar } from "notistack";
 import ButtonContained from "../StyledComponents/ButtonContained";
@@ -12,12 +12,22 @@ const UploadCard = () => {
   const ocrCtx = useContext(OCRContext);
   const [isLoading, setIsLoading] = useState(false);
   const [useOcr, setUseOcr] = useState(false);
+  const [ocrEngine, setOcrEngine] = useState("tesseract");
+  const [visionAvailable, setVisionAvailable] = useState(false);
   const [jobId, setJobId] = useState(() => sessionStorage.getItem("parseJobId"));
   const [progress, setProgress] = useState("");
   const [paused, setPaused] = useState(false);
   const [retryVersion, setRetryVersion] = useState(0);
   const submittedFile = useRef(null);
   const { enqueueSnackbar } = useSnackbar();
+
+  useEffect(() => {
+    let active = true;
+    httpRequest.get("/health").then(({ data }) => {
+      if (active) setVisionAvailable(Boolean(data.google_vision_available));
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (!jobId) return;
@@ -115,6 +125,7 @@ const UploadCard = () => {
     const form = new FormData();
     form.append("file", ocrCtx.file);
     form.append("use_ocr", String(useOcr));
+    form.append("ocr_engine", ocrEngine);
     setIsLoading(true);
     setProgress("Đang tải file lên...");
     try {
@@ -147,9 +158,24 @@ const UploadCard = () => {
           />
         </div>
         <FormControlLabel
-          control={<Switch disabled={isLoading || !!jobId} checked={useOcr} onChange={(event) => setUseOcr(event.target.checked)} color="secondary" />}
+          control={<Switch disabled={isLoading || !!jobId} checked={useOcr} onChange={(event) => {
+            setUseOcr(event.target.checked);
+          }} color="secondary" />}
           label="Dùng OCR cho toàn bộ PDF / ảnh"
         />
+        {useOcr && <TextField select label="Engine OCR" size="small" value={ocrEngine}
+          disabled={isLoading || !!jobId} onChange={(event) => setOcrEngine(event.target.value)}
+          sx={{ mx: 3, my: 1, minWidth: 260 }}>
+          <MenuItem value="tesseract">Tesseract (tại máy)</MenuItem>
+          <MenuItem value="google_vision" disabled={!visionAvailable}>Google Cloud Vision</MenuItem>
+        </TextField>}
+        {useOcr && !visionAvailable && <Typography variant="caption" sx={{ mx: 3, mb: 1 }}>
+          Google Cloud Vision chưa được bật trên máy chủ.
+        </Typography>}
+        {useOcr && ocrEngine === "google_vision" && <Alert severity="info" sx={{ mx: 3, mb: 1, textAlign: "left" }}>
+          Ảnh từng trang sẽ được gửi tới Google Cloud Vision và có thể phát sinh phí API.
+          Chữ và các trường hóa đơn được đọc bằng Vision.
+        </Alert>}
         <Alert severity="info" sx={{ mx: 3, textAlign: "left" }}>
           XML được đọc trực tiếp. Bật OCR để nhận dạng mọi trang PDF từ hình ảnh, kể cả PDF có lớp chữ. Tắt OCR để lấy chữ và bảng có sẵn trong PDF.
         </Alert>

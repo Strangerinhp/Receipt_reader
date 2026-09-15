@@ -47,7 +47,7 @@ def parse_xml(payload: bytes) -> tuple[dict[str, Any], str]:
     return normalize_invoice_document(parsed), text
 
 
-def parse_input(filename: str, content_type: str | None, payload: bytes, use_ocr: bool, progress=None) -> dict[str, Any]:
+def _parse_input(filename: str, content_type: str | None, payload: bytes, use_ocr: bool, progress=None, vision=None) -> dict[str, Any]:
     if not payload:
         raise ValueError("File rỗng.")
     suffix = Path(filename).suffix.lower()
@@ -68,11 +68,11 @@ def parse_input(filename: str, content_type: str | None, payload: bytes, use_ocr
         parser_name = "JSON"
         ocr_used = False
     elif suffix == ".pdf" or mime == "application/pdf":
-        document, extracted_text, warnings, ocr_used = read_pdf(payload, use_ocr, progress=progress)
+        document, extracted_text, warnings, ocr_used = read_pdf(payload, use_ocr, progress=progress, vision=vision)
         parser_name = "PDF bố cục + OCR" if ocr_used else "PDF bố cục và bảng"
     elif mime.startswith("image/") or suffix in {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}:
         if use_ocr:
-            document, extracted_text, warnings, ocr_used = read_image(payload, progress=progress)
+            document, extracted_text, warnings, ocr_used = read_image(payload, progress=progress, vision=vision)
             parser_name = "OCR bố cục và bảng"
         else:
             extracted_text = ""
@@ -86,7 +86,7 @@ def parse_input(filename: str, content_type: str | None, payload: bytes, use_ocr
         ocr_used = False
         document = document_from_text(extracted_text)
     elif use_ocr:
-        document, extracted_text, warnings, ocr_used = read_image(payload, progress=progress)
+        document, extracted_text, warnings, ocr_used = read_image(payload, progress=progress, vision=vision)
         parser_name = "OCR bố cục và bảng"
     else:
         extracted_text = ""
@@ -106,3 +106,19 @@ def parse_input(filename: str, content_type: str | None, payload: bytes, use_ocr
         "source_base64": base64.b64encode(payload).decode("ascii"),
         "warnings": warnings,
     }
+
+
+def parse_input(filename: str, content_type: str | None, payload: bytes, use_ocr: bool,
+                progress=None, ocr_engine="tesseract") -> dict[str, Any]:
+    from .google_vision import VisionReader, validate_request
+    validate_request(use_ocr, ocr_engine)
+    vision = VisionReader() if use_ocr and ocr_engine == "google_vision" else None
+    try:
+        result = _parse_input(filename, content_type, payload, use_ocr, progress, vision)
+        result["ocr_engine"] = ocr_engine if result["ocr_used"] else None
+        if result["ocr_used"]:
+            result["parser"] = "Google Cloud Vision" if vision is not None else result["parser"] + " · Tesseract"
+        return result
+    finally:
+        if vision is not None:
+            vision.close()

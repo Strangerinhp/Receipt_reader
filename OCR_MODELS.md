@@ -21,3 +21,7 @@ Khởi động lại backend rồi upload lại hóa đơn; dữ liệu đã lư
 Notebook cài `tesseract-ocr`, `tesseract-ocr-vie`, `tesseract-ocr-eng` từ hệ thống. Ô cài đặt kiểm tra ngôn ngữ và chạy OCR mẫu tạo PDF có lớp chữ. Không cần GPU hoặc tải model riêng.
 
 Để cập nhật runtime cũ: bật `STOP_DEMO` và chạy ô cuối, tải notebook mới, rồi chạy lần lượt ba ô code đầu. Thư mục model thử nghiệm cũ không còn được app tham chiếu. Các bản sửa tải cloudflared khi tunnel đang chạy, log cài đặt và polling kết quả được giữ nguyên.
+
+## Engine Google Cloud Vision
+
+Có thể chọn Google Cloud Vision thay cho Tesseract ở giao diện upload. Nhánh này chạy độc lập; cài SDK và credentials theo [GOOGLE_VISION.md](GOOGLE_VISION.md). Cấu hình Tesseract ở trên chỉ áp dụng khi chọn Tesseract.

@@ -1,0 +1,2 @@
+# Optional; install alongside requirements.sqlite.txt or requirements.txt.
+google-cloud-vision>=3.10,<4

@@ -6,7 +6,7 @@ Tài liệu cập nhật ngày 15/09/2026. Phần nhận dạng OCR được kh�
 
 App phân tích từng trang PDF theo lựa chọn của người dùng. Bật OCR: mọi trang được render thành ảnh rồi nhận dạng, không đọc lớp chữ có sẵn để thay thế OCR. Tắt OCR: dùng lớp chữ và bảng PyMuPDF khi đạt điều kiện. Sau đó văn bản và bảng được ánh xạ vào cùng cấu trúc dữ liệu hóa đơn đang dùng cho XML. PyMuPDF vẫn dùng để mở/render PDF và dò bảng trên PDF tạm do Tesseract tạo ra.
 
-Toàn bộ xử lý PDF/OCR chạy cục bộ ở backend bằng PyMuPDF, Pillow, OpenCV và Tesseract. Luồng này dùng gói ngôn ngữ Tesseract tại máy, không gọi dịch vụ OCR bên ngoài, tra cứu hóa đơn hay đọc XML đi kèm để bổ sung dữ liệu.
+Mặc định PDF/OCR chạy cục bộ bằng PyMuPDF, Pillow, OpenCV và Tesseract. Khi người dùng chọn Google Cloud Vision, ảnh từng trang được gửi tới Vision API để nhận dạng; nhánh này không gọi Tesseract. Cả hai nhánh không tra cứu hóa đơn hay đọc XML đi kèm để bổ sung dữ liệu.
 
 | File | Trách nhiệm |
 | --- | --- |
@@ -394,3 +394,16 @@ Luồng đọc ảnh dùng chung `ocr_page()` và `_finish()`; `read_image()` du
 - Bộ đọc không xác minh chữ ký số hoặc tính hợp lệ pháp lý của hóa đơn. `DSCKS` của nhánh PDF giữ cấu trúc mặc định.
 
 Khi mở rộng, điểm sửa tương ứng là `LABELS`/`document_from_text()` cho nhãn; `header_columns()`/`apply_tables()` cho cột và tổng hợp; `_usable_text()` cho lựa chọn nhánh; `_grid_lines()`/`_raster_cells()`/`_ocr_ruled_table()` cho hình học scan; `validate_document()` cho quy tắc kiểm tra.
+
+
+## 15. Engine Google Cloud Vision tùy chọn
+
+Request parse và parse-jobs nhận `ocr_engine=tesseract|google_vision`, mặc định `tesseract`. Giá trị được truyền nguyên qua tiến trình spawn; backend kiểm tra engine và `GOOGLE_VISION_ENABLED`. Khi OCR tắt, PDF dùng lớp chữ và XML/JSON/TXT vẫn đọc trực tiếp, không gọi API. `GET /api/health` công bố cờ bật Vision, không trả credentials.
+
+`parser.parse_input()` tạo `VisionReader` khi chọn Vision và đóng client sau khi hoàn tất hoặc có lỗi. `read_pdf()` render từng trang 300 DPI như cũ; `read_image()` duyệt từng frame. `_recognize_page()` chọn đúng một engine. Nhánh Tesseract vẫn dùng `ocr_page()` nguyên logic đã khôi phục; nhánh Vision không dùng `_tesseract()`, OSD, chỉnh nghiêng hoặc lọc nền 170.
+
+`google_vision.py` dùng SDK Google và Application Default Credentials tại backend, gửi PNG tới `document_text_detection`, gợi ý `vi/en`, timeout 60 giây/trang, tắt retry tự động. PNG lớn hơn 7 MB bị từ chối để chừa dung lượng base64 trong request. Không tự giảm độ phân giải. Lỗi credentials/quota/API hoặc timeout làm tác vụ thất bại với thông báo rõ; không chuyển ngầm sang Tesseract, không coi kết quả thiếu trang là thành công.
+
+`vision_layout.py` lấy chữ và bounding box từ response, ghép dòng theo tọa độ và gán từ vào ô theo tâm box trên đường kẻ dò bằng OpenCV. Nếu nhận được tiêu đề bảng hỗ trợ, chuyển các ô thành cấu trúc `Google Vision cells` với confidence 0–100. Sau đó `_finish()` và `apply_tables()` ánh xạ/kiểm tra dữ liệu như nhánh cũ. Chưa hỗ trợ đầy đủ bảng không kẻ, nhiều bảng trong một trang hoặc trang nghiêng; không xác định được bảng thì giữ văn bản và cảnh báo kiểm tra dòng hàng.
+
+Kết quả có `ocr_engine` và nhãn parser. Giao diện cho chọn engine trước upload; kết quả được chỉnh/lưu vào schema hóa đơn hiện có cùng văn bản/file nguồn. Database hiện chưa lưu riêng nhãn engine cấp bản nháp; mở lại hóa đơn đã lưu hiển thị nhãn OCR chung. Tác vụ giữ tùy chọn engine trong lúc chạy; polling/reconnect không upload hay gọi OCR lần nữa. Cấu hình local/Colab: [GOOGLE_VISION.md](GOOGLE_VISION.md).

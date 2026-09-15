@@ -2,6 +2,9 @@
 .env
 backend/.env
 frontend/.env
+credentials/
+*-service-account.json
+application_default_credentials.json
 
 # Python
 __pycache__/
