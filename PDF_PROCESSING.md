@@ -1,12 +1,12 @@
 # Luồng xử lý hóa đơn PDF hiện tại
 
-Tài liệu cập nhật ngày 15/09/2026. OCR dùng Tesseract `tessdata_best`, render 300 DPI và lọc nền cố định 170.
+Tài liệu cập nhật ngày 15/09/2026. Phần nhận dạng OCR được khôi phục theo commit `fc07435` (10/09/2026), trước đợt thử nghiệm model/upsampling: Tesseract dùng gói ngôn ngữ cài tại máy, render 300 DPI và lọc nền cố định 170. Giữ các sửa lỗi tác vụ nền, Colab, giao diện và lựa chọn bật OCR cho mọi trang.
 
 ## 1. Phạm vi và kiến trúc
 
 App phân tích từng trang PDF theo lựa chọn của người dùng. Bật OCR: mọi trang được render thành ảnh rồi nhận dạng, không đọc lớp chữ có sẵn để thay thế OCR. Tắt OCR: dùng lớp chữ và bảng PyMuPDF khi đạt điều kiện. Sau đó văn bản và bảng được ánh xạ vào cùng cấu trúc dữ liệu hóa đơn đang dùng cho XML. PyMuPDF vẫn dùng để mở/render PDF và dò bảng trên PDF tạm do Tesseract tạo ra.
 
-Toàn bộ xử lý PDF/OCR chạy cục bộ ở backend bằng PyMuPDF, Pillow, OpenCV và Tesseract. Luồng này dùng model Tesseract best tại máy, không gọi dịch vụ OCR bên ngoài, tra cứu hóa đơn hay đọc XML đi kèm để bổ sung dữ liệu.
+Toàn bộ xử lý PDF/OCR chạy cục bộ ở backend bằng PyMuPDF, Pillow, OpenCV và Tesseract. Luồng này dùng gói ngôn ngữ Tesseract tại máy, không gọi dịch vụ OCR bên ngoài, tra cứu hóa đơn hay đọc XML đi kèm để bổ sung dữ liệu.
 
 | File | Trách nhiệm |
 | --- | --- |
@@ -106,9 +106,9 @@ Nội dung nhiều dòng trong một ô được giữ đến bước ánh xạ.
 
 ### 5.1. Cấu hình Tesseract
 
-`_tesseract()` dùng `TESSERACT_CMD` nếu được cấu hình và chỉ đọc bộ model trong `TESSERACT_MODEL_DIR` (mặc định `backend/models/tessdata_best`). `tesseract_models.py` kiểm tra SHA-256 của `vie`, `eng`, `osd` theo phiên bản ghim từ repository chính thức, cùng `configs/pdf` và `pdf.ttf` để tạo PDF có lớp chữ. Thiếu/sai file thì báo chạy `python backend/setup_tesseract.py`; không chuyển sang language pack hệ thống hay chỉ tiếng Anh. Checksum được cache theo đường dẫn, kích thước và thời điểm sửa/thay file để tránh đọc lại toàn bộ model ở mỗi trang.
+`_tesseract()` dùng `TESSERACT_CMD` nếu được cấu hình. Nếu có thư mục `backend/tessdata`, dùng thư mục đó; nếu không, dùng language pack của Tesseract đã cài trong hệ thống, giống commit `fc07435`. Không còn bước tải/kiểm tra model thử nghiệm hoặc ép OEM riêng.
 
-Mọi bước nhận dạng chữ dùng `vie+eng` và `--oem 1` (LSTM). Cột STT vẫn dùng `eng` với bộ best và danh sách ký tự số. Nhận diện hướng dùng `osd` với `--oem 0` riêng, vì model OSD dùng engine cũ. Script setup tải từng file vào thư mục tạm, kiểm tra checksum rồi mới thay thế; tải lỗi không ghi đè model cũ. `--check` chạy thêm một mẫu OCR xuất PDF và đọc lại lớp chữ để xác nhận executable cùng các file hỗ trợ hoạt động với bộ best. Notebook luôn chạy bước này; model được lưu ngoài thư mục clone và dùng lại khi còn đúng checksum. Xem [OCR_MODELS.md](OCR_MODELS.md).
+Chọn `vie+eng` khi có cả hai, hoặc ngôn ngữ có sẵn trong hai gói này. Nếu không có gói nào thì báo lỗi; chỉ có `eng` thì thêm cảnh báo thiếu tiếng Việt. Cột STT vẫn dùng `eng` và danh sách ký tự số theo luồng cũ. Colab cài `tesseract-ocr-vie` và `tesseract-ocr-eng`, rồi chạy kiểm tra tạo PDF có lớp chữ trước khi mở demo. Xem [OCR_MODELS.md](OCR_MODELS.md).
 
 PDF luôn render 300 DPI. Không còn dùng `OCR_PDF_DPI` hoặc `OCR_BINARIZE_THRESHOLD`, kể cả khi máy vẫn đặt các biến cũ. Tiền xử lý Tesseract giữ hành vi trước đợt thử upscale: giới hạn cạnh dài 4.500 pixel, chỉnh nghiêng/hướng, lọc nền bằng ngưỡng 170.
 
@@ -365,6 +365,8 @@ Kết quả hết hạn sau một giờ, bản ghi tác vụ đang chạy có h�
 
 Frontend chuyển sang màn hình bản nháp sau khi phân tích. Cảnh báo được hiển thị cả qua thông báo và trên bản nháp. Người dùng xem PDF gốc/văn bản trích xuất, chỉnh trường rồi mới lưu.
 
+Khung văn bản mặc định thu gọn khoảng trắng liên tiếp trong từng dòng và giữ tối đa một dòng trống giữa các đoạn, có dấu phân cách trang. Đây chỉ là định dạng xem: `extracted_text` dùng để phân tích/lưu không bị thay đổi. Bật “Giữ bố cục văn bản” để xem nguyên văn với thanh cuộn ngang, không tự xuống dòng. Cách này tránh khoảng trắng do `page.get_text(sort=True)` mô phỏng vị trí chữ trong PDF làm khung xem bị giãn và xuống dòng bất thường; không sửa lỗi nhận diện chữ/dấu của OCR.
+
 Tên đơn vị, địa chỉ, mô tả hàng, tiền bằng chữ và ngân hàng dùng ô nhiều dòng với tối đa tám dòng hiển thị. Dòng hàng có nhãn trang nguồn khi có `ExtractionSource.page`; dòng `TChat="4"` được ghi là “Ghi chú”.
 
 `POST /api/invoices` lưu file gốc, văn bản và `DocumentJson`, đồng thời tạo các bản ghi dòng hàng/trường mở rộng. `ExtractionSource` nằm trong JSON nên được giữ mà không cần thêm cột database. Các thuộc tính cấp bản nháp như `warnings`, `parser`, `ocr_used` hiện không có trường lưu riêng tương ứng; database lưu `OcrEnabled`. Vì thế thông tin trạng thái dựng lại khi mở hóa đơn đã lưu không đầy đủ như bản nháp mới phân tích. Sửa/lưu bản nháp không tự gọi lại `validate_document()`.
@@ -385,7 +387,7 @@ Luồng đọc ảnh dùng chung `ocr_page()` và `_finish()`; `read_image()` du
 
 - Bảng không kẻ, nhiều bảng scan trên một trang, hàng bị cắt qua trang, tiêu đề không thuộc các nhãn hỗ trợ có thể không được đọc đầy đủ.
 - Văn bản người bán/người mua dùng quy tắc chia theo nhãn và dòng; thiếu/sai nhãn có thể làm chia vùng sai. Chưa có kiểm chứng tự động cho mọi tên, địa chỉ, mã cơ quan thuế hoặc lỗi dấu tiếng Việt.
-- Bộ lọc nền 170 có thể làm mất chữ nhạt; bộ best không bảo đảm khôi phục được các dấu đã mất ở bước tiền xử lý. Các ngưỡng hình học chưa có điều chỉnh theo từng nhà cung cấp trên giao diện.
+- Bộ lọc nền 170 có thể làm mất chữ nhạt; Tesseract không bảo đảm khôi phục được các dấu đã mất ở bước tiền xử lý. Các ngưỡng hình học chưa có điều chỉnh theo từng nhà cung cấp trên giao diện.
 - Khi OCR tắt, không tự OCR nếu bảng không đọc được. Không có cơ chế lấy phần thiếu từ XML hay lấy header tốt hơn ở trang khác.
 - Không có cảnh báo cho mọi lỗi có thể xảy ra: chẳng hạn tổng tiền khớp vẫn không chứng minh mô tả đúng, và các dòng chưa phân loại không tham gia tổng dòng `TChat="1"`.
 - Kết quả OCR luôn là bản nháp cần đối chiếu. Số lượng có thể bị nhận nhầm dấu thập phân, chẳng hạn `224.1` thay cho `224,1`; bộ kiểm tra định dạng sẽ cảnh báo nhưng không tự sửa. Tên, mô tả và tiền bằng chữ vẫn có thể sai dấu.

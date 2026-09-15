@@ -5,13 +5,13 @@ import io
 import os
 import re
 from statistics import median
+from pathlib import Path
 
 import pymupdf
 from PIL import Image, ImageOps, ImageSequence
 
 from .invoice_tables import apply_tables, decimal_value, header_columns, validate_document
 from .invoice_text import compact, document_from_text, label_values
-from .tesseract_models import tesseract_config
 
 
 def _tables(page, page_number: int, method: str, add_lines=None) -> list[dict]:
@@ -43,14 +43,16 @@ def _tesseract():
     import pytesseract
     if os.getenv("TESSERACT_CMD"):
         pytesseract.pytesseract.tesseract_cmd = os.environ["TESSERACT_CMD"]
-    config = tesseract_config()
+    local = Path(__file__).resolve().parents[1] / "tessdata"
+    config = f'--tessdata-dir "{local}"' if local.exists() else ""
     try:
         languages = set(pytesseract.get_languages(config=config))
     except Exception as exc:
         raise RuntimeError("Không tìm thấy Tesseract OCR. Hãy cài Tesseract và cấu hình TESSERACT_CMD.") from exc
-    if not {"vie", "eng"}.issubset(languages):
-        raise RuntimeError("Tesseract không đọc được model best vie/eng. Chạy python backend/setup_tesseract.py.")
-    return pytesseract, "vie+eng", config
+    language = "+".join(lang for lang in ("vie", "eng") if lang in languages)
+    if not language:
+        raise RuntimeError("Tesseract cần language pack vie hoặc eng.")
+    return pytesseract, language, config
 
 
 def _prepare_image(image):
@@ -224,9 +226,11 @@ def _ocr_ruled_table(image, geometry, page_number, pytesseract, language, config
 def ocr_page(image, page_number: int) -> tuple[str, list[dict], list[str]]:
     pytesseract, language, config = _tesseract()
     warnings = []
+    if "vie" not in language:
+        warnings.append(f"Trang {page_number}: thiếu language pack vie, OCR đang dùng tiếng Anh.")
     image = _prepare_image(image)
     try:
-        osd = pytesseract.image_to_osd(image, config=tesseract_config(oem=0), output_type=pytesseract.Output.DICT, timeout=15)
+        osd = pytesseract.image_to_osd(image, config=config, output_type=pytesseract.Output.DICT, timeout=15)
         if osd.get("orientation_conf", 0) >= 5 and osd.get("rotate"):
             image = image.rotate(-int(osd["rotate"]), expand=True, fillcolor="white")
     except (pytesseract.TesseractError, RuntimeError):
@@ -239,11 +243,11 @@ def ocr_page(image, page_number: int) -> tuple[str, list[dict], list[str]]:
             table = _ocr_ruled_table(clean_image, geometry, page_number, pytesseract, language, config, rule_image=image)
             if table:
                 xs, ys = geometry
-                header_box = (int(xs[0]), 0, int(xs[-1]), int(ys[0]) - 3)
-                footer_box = (int(xs[0]), int(ys[-1]) + 3, int(xs[-1]), image.height)
-                texts = [pytesseract.image_to_string(clean_image.crop(header_box), lang=language, config=f"{config} --psm 3", timeout=90),
+                header = clean_image.crop((int(xs[0]), 0, int(xs[-1]), int(ys[0]) - 3))
+                footer = clean_image.crop((int(xs[0]), int(ys[-1]) + 3, int(xs[-1]), image.height))
+                texts = [pytesseract.image_to_string(header, lang=language, config=f"{config} --psm 3", timeout=90),
                          "\n".join(" | ".join(row) for row in table["rows"]),
-                         pytesseract.image_to_string(clean_image.crop(footer_box), lang=language, config=f"{config} --psm 6", timeout=90)]
+                         pytesseract.image_to_string(footer, lang=language, config=f"{config} --psm 6", timeout=90)]
                 warnings.append(f"Trang {page_number} dùng OCR theo ô; cần đối chiếu chữ và số với ảnh gốc.")
                 return "\n".join(texts), [table], warnings
         except (pytesseract.TesseractError, RuntimeError, ValueError):

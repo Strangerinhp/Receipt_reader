@@ -2,7 +2,7 @@ import { useContext, useEffect, useMemo, useState } from "react";
 import { useSnackbar } from "notistack";
 import {
   Accordion, AccordionDetails, AccordionSummary, Alert, Box, Chip, Divider,
-  Grid, IconButton, Paper, Tab, Tabs, TextField, Tooltip, Typography,
+  FormControlLabel, Grid, IconButton, Paper, Switch, Tab, Tabs, TextField, Tooltip, Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -118,6 +118,16 @@ const Section = ({ title, code, children, defaultExpanded = false }) => (
 
 const SourcePreview = ({ draft }) => {
   const [tab, setTab] = useState(0);
+  const [preserveLayout, setPreserveLayout] = useState(false);
+  // Layout extraction pads text to match PDF coordinates. Compact only the
+  // preview; keep the original text for parsing, saving and layout inspection.
+  const readableText = useMemo(() => (draft?.extracted_text || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\f")
+    .map((page) => page.split("\n")
+      .map((line) => line.replace(/[^\S\r\n]+/g, " ").trim())
+      .join("\n").replace(/\n{3,}/g, "\n\n").trim())
+    .join("\n\n──────────\n\n"), [draft?.extracted_text]);
   const sourceUrl = draft?.source_base64 ? `data:${draft.content_type || "application/octet-stream"};base64,${draft.source_base64}` : "";
   const isPdf = draft?.content_type === "application/pdf" || draft?.filename?.toLowerCase().endsWith(".pdf");
   const isImage = draft?.content_type?.startsWith("image/");
@@ -132,10 +142,17 @@ const SourcePreview = ({ draft }) => {
         {isImage && sourceUrl && <img src={sourceUrl} alt="Hóa đơn" style={{ width: "100%", height: "auto" }} />}
         {!isPdf && !isImage && <TextField multiline fullWidth minRows={24} value={draft?.extracted_text || "Không có bản xem trước."} InputProps={{ readOnly: true }} />}
       </Box>}
-      {tab === 1 && <Box component="pre" tabIndex={0} aria-label="Văn bản đọc được"
-        sx={{ flex: 1, minHeight: 0, minWidth: 0, m: 0, p: 2, overflowY: "scroll", overflowX: "auto", scrollbarGutter: "stable", scrollbarColor: "#888 #f1f1f1", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 14, lineHeight: 1.6 }}>
-        {draft?.extracted_text || "Không đọc được văn bản."}
-      </Box>}
+      {tab === 1 && <>
+        <Box sx={{ px: 2, py: 0.5, flexShrink: 0 }}>
+          <FormControlLabel control={<Switch size="small" checked={preserveLayout}
+            onChange={(event) => setPreserveLayout(event.target.checked)} />}
+            label={<Typography variant="body2">Giữ bố cục văn bản</Typography>} />
+        </Box>
+        <Box component="pre" tabIndex={0} aria-label="Văn bản đọc được"
+          sx={{ flex: 1, minHeight: 0, minWidth: 0, m: 0, p: 2, overflowY: "scroll", overflowX: "auto", scrollbarGutter: "stable", scrollbarColor: "#888 #f1f1f1", whiteSpace: preserveLayout ? "pre" : "pre-wrap", overflowWrap: preserveLayout ? "normal" : "anywhere", fontSize: 14, lineHeight: 1.6 }}>
+          {(preserveLayout ? draft?.extracted_text : readableText) || "Không đọc được văn bản."}
+        </Box>
+      </>}
     </Paper>
   );
 };
