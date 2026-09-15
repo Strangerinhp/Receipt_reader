@@ -296,14 +296,7 @@ def _finish(texts, tables, warnings, ocr_used):
     return document, text, list(dict.fromkeys(warnings)), ocr_used
 
 
-def _recognize_page(image, number, vision):
-    if vision is None:
-        return ocr_page(image, number)
-    from .vision_layout import extract_page
-    return extract_page(image, number, vision, _raster_cells)
-
-
-def read_pdf(payload: bytes, use_ocr: bool, progress=None, vision=None):
+def read_pdf(payload: bytes, use_ocr: bool, progress=None):
     texts, tables, warnings = [], [], []
     ocr_used = False
     try:
@@ -322,7 +315,7 @@ def read_pdf(payload: bytes, use_ocr: bool, progress=None, vision=None):
                     progress(f"Đang OCR trang {number}/{len(pdf)}...")
                 pixmap = page.get_pixmap(dpi=300, alpha=False)
                 image = Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
-                text, page_tables, page_warnings = _recognize_page(image, number, vision)
+                text, page_tables, page_warnings = ocr_page(image, number)
                 tables.extend(page_tables)
                 warnings.extend(page_warnings)
                 ocr_used = True
@@ -342,7 +335,7 @@ def read_pdf(payload: bytes, use_ocr: bool, progress=None, vision=None):
     return _finish(texts, tables, warnings, ocr_used)
 
 
-def read_image(payload: bytes, progress=None, vision=None):
+def read_image(payload: bytes, progress=None):
     texts, tables, warnings = [], [], []
     try:
         source = Image.open(io.BytesIO(payload))
@@ -352,7 +345,7 @@ def read_image(payload: bytes, progress=None, vision=None):
         for number, frame in enumerate(ImageSequence.Iterator(source), 1):
             if progress:
                 progress(f"Đang OCR ảnh {number}...")
-            text, page_tables, page_warnings = _recognize_page(frame.copy(), number, vision)
+            text, page_tables, page_warnings = ocr_page(frame.copy(), number)
             texts.append(text)
             tables.extend(page_tables)
             warnings.extend(page_warnings)

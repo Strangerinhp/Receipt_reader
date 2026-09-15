@@ -13,21 +13,12 @@ const UploadCard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [useOcr, setUseOcr] = useState(false);
   const [ocrEngine, setOcrEngine] = useState("tesseract");
-  const [visionAvailable, setVisionAvailable] = useState(false);
   const [jobId, setJobId] = useState(() => sessionStorage.getItem("parseJobId"));
   const [progress, setProgress] = useState("");
   const [paused, setPaused] = useState(false);
   const [retryVersion, setRetryVersion] = useState(0);
   const submittedFile = useRef(null);
   const { enqueueSnackbar } = useSnackbar();
-
-  useEffect(() => {
-    let active = true;
-    httpRequest.get("/health").then(({ data }) => {
-      if (active) setVisionAvailable(Boolean(data.google_vision_available));
-    }).catch(() => {});
-    return () => { active = false; };
-  }, []);
 
   useEffect(() => {
     if (!jobId) return;
@@ -167,14 +158,11 @@ const UploadCard = () => {
           disabled={isLoading || !!jobId} onChange={(event) => setOcrEngine(event.target.value)}
           sx={{ mx: 3, my: 1, minWidth: 260 }}>
           <MenuItem value="tesseract">Tesseract (tại máy)</MenuItem>
-          <MenuItem value="google_vision" disabled={!visionAvailable}>Google Cloud Vision</MenuItem>
+          <MenuItem value="mistral">Mistral OCR</MenuItem>
         </TextField>}
-        {useOcr && !visionAvailable && <Typography variant="caption" sx={{ mx: 3, mb: 1 }}>
-          Google Cloud Vision chưa được bật trên máy chủ.
-        </Typography>}
-        {useOcr && ocrEngine === "google_vision" && <Alert severity="info" sx={{ mx: 3, mb: 1, textAlign: "left" }}>
-          Ảnh từng trang sẽ được gửi tới Google Cloud Vision và có thể phát sinh phí API.
-          Chữ và các trường hóa đơn được đọc bằng Vision.
+        {useOcr && ocrEngine === "mistral" && <Alert severity="info" sx={{ mx: 3, mb: 1, textAlign: "left" }}>
+          File sẽ được gửi tới Mistral OCR và có thể phát sinh phí API.
+          Chữ, bảng và các trường hóa đơn được đọc bằng Mistral.
         </Alert>}
         <Alert severity="info" sx={{ mx: 3, textAlign: "left" }}>
           XML được đọc trực tiếp. Bật OCR để nhận dạng mọi trang PDF từ hình ảnh, kể cả PDF có lớp chữ. Tắt OCR để lấy chữ và bảng có sẵn trong PDF.

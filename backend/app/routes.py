@@ -3,7 +3,6 @@ from __future__ import annotations
 from flask import Blueprint, current_app, jsonify, request
 
 from .parser import parse_input
-from .google_vision import enabled as vision_enabled
 
 
 api = Blueprint("api", __name__)
@@ -20,7 +19,6 @@ def health():
         "status": "ok",
         "database": "configured" if repository.configured else "not_configured",
         "database_engine": repository.engine_name,
-        "google_vision_available": vision_enabled(),
     })
 
 

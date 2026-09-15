@@ -47,7 +47,8 @@ def parse_xml(payload: bytes) -> tuple[dict[str, Any], str]:
     return normalize_invoice_document(parsed), text
 
 
-def _parse_input(filename: str, content_type: str | None, payload: bytes, use_ocr: bool, progress=None, vision=None) -> dict[str, Any]:
+def _parse_input(filename: str, content_type: str | None, payload: bytes, use_ocr: bool, progress=None,
+                 ocr_engine="tesseract") -> dict[str, Any]:
     if not payload:
         raise ValueError("File rỗng.")
     suffix = Path(filename).suffix.lower()
@@ -68,12 +69,22 @@ def _parse_input(filename: str, content_type: str | None, payload: bytes, use_oc
         parser_name = "JSON"
         ocr_used = False
     elif suffix == ".pdf" or mime == "application/pdf":
-        document, extracted_text, warnings, ocr_used = read_pdf(payload, use_ocr, progress=progress, vision=vision)
-        parser_name = "PDF bố cục + OCR" if ocr_used else "PDF bố cục và bảng"
+        if use_ocr and ocr_engine == "mistral":
+            from .mistral_ocr import read_mistral
+            document, extracted_text, warnings, ocr_used = read_mistral(payload, "application/pdf", progress)
+            parser_name = "Mistral OCR"
+        else:
+            document, extracted_text, warnings, ocr_used = read_pdf(payload, use_ocr, progress=progress)
+            parser_name = "PDF bố cục + Tesseract" if ocr_used else "PDF bố cục và bảng"
     elif mime.startswith("image/") or suffix in {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}:
         if use_ocr:
-            document, extracted_text, warnings, ocr_used = read_image(payload, progress=progress, vision=vision)
-            parser_name = "OCR bố cục và bảng"
+            if ocr_engine == "mistral":
+                from .mistral_ocr import read_mistral
+                document, extracted_text, warnings, ocr_used = read_mistral(payload, mime, progress)
+                parser_name = "Mistral OCR"
+            else:
+                document, extracted_text, warnings, ocr_used = read_image(payload, progress=progress)
+                parser_name = "Tesseract OCR bố cục và bảng"
         else:
             extracted_text = ""
             parser_name = "Không OCR"
@@ -86,8 +97,10 @@ def _parse_input(filename: str, content_type: str | None, payload: bytes, use_oc
         ocr_used = False
         document = document_from_text(extracted_text)
     elif use_ocr:
-        document, extracted_text, warnings, ocr_used = read_image(payload, progress=progress, vision=vision)
-        parser_name = "OCR bố cục và bảng"
+        if ocr_engine == "mistral":
+            raise ValueError("Mistral OCR chỉ nhận PDF hoặc ảnh.")
+        document, extracted_text, warnings, ocr_used = read_image(payload, progress=progress)
+        parser_name = "Tesseract OCR bố cục và bảng"
     else:
         extracted_text = ""
         parser_name = "Không xác định"
@@ -110,15 +123,8 @@ def _parse_input(filename: str, content_type: str | None, payload: bytes, use_oc
 
 def parse_input(filename: str, content_type: str | None, payload: bytes, use_ocr: bool,
                 progress=None, ocr_engine="tesseract") -> dict[str, Any]:
-    from .google_vision import VisionReader, validate_request
-    validate_request(use_ocr, ocr_engine)
-    vision = VisionReader() if use_ocr and ocr_engine == "google_vision" else None
-    try:
-        result = _parse_input(filename, content_type, payload, use_ocr, progress, vision)
-        result["ocr_engine"] = ocr_engine if result["ocr_used"] else None
-        if result["ocr_used"]:
-            result["parser"] = "Google Cloud Vision" if vision is not None else result["parser"] + " · Tesseract"
-        return result
-    finally:
-        if vision is not None:
-            vision.close()
+    from .mistral_ocr import validate_engine
+    validate_engine(ocr_engine)
+    result = _parse_input(filename, content_type, payload, use_ocr, progress, ocr_engine)
+    result["ocr_engine"] = ocr_engine if result["ocr_used"] else None
+    return result

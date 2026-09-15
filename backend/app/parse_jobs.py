@@ -29,8 +29,8 @@ class ParseJobs:
         return db
 
     def submit(self, filename, content_type, payload, use_ocr, ocr_engine="tesseract"):
-        from .google_vision import validate_request
-        validate_request(use_ocr, ocr_engine)
+        from .mistral_ocr import validate_engine
+        validate_engine(ocr_engine)
         job_id = uuid.uuid4().hex
         db = self.connect()
         try:
