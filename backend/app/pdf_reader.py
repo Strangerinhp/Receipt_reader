@@ -39,6 +39,11 @@ def _usable_text(page, text: str) -> bool:
     return True
 
 
+def _layout_text(page) -> str:
+    return "\n".join(block[4].strip() for block in page.get_text("blocks", sort=True)
+                     if block[6] == 0 and block[4].strip())
+
+
 def _tesseract():
     import pytesseract
     if os.getenv("TESSERACT_CMD"):
@@ -259,7 +264,7 @@ def ocr_page(image, page_number: int) -> tuple[str, list[dict], list[str]]:
         raise RuntimeError(f"OCR trang {page_number} thất bại hoặc quá thời gian: {exc}") from exc
     with pymupdf.open(stream=payload, filetype="pdf") as pdf:
         page = pdf[0]
-        text = page.get_text(sort=True)
+        text = _layout_text(page)
         tables = _tables(page, page_number, "OCR table", _grid_lines(image, page))
     warnings.append(f"Trang {page_number} dùng OCR; cần đối chiếu chữ và số với ảnh gốc.")
     return text, tables, warnings
@@ -321,7 +326,7 @@ def read_pdf(payload: bytes, use_ocr: bool, progress=None):
                 ocr_used = True
                 texts.append(text)
                 continue
-            text = page.get_text(sort=True)
+            text = _layout_text(page)
             if _usable_text(page, text):
                 try:
                     tables.extend(_tables(page, number, "PDF table"))

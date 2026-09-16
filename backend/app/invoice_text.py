@@ -52,7 +52,8 @@ FOLDED_LABEL_RE = re.compile(fold_accents(LABEL_RE.pattern), re.I)
 
 def label_values(text: str, multiline: bool = False) -> list[tuple[str, str]]:
     values = []
-    for line in unicodedata.normalize("NFC", text).splitlines():
+    lines = unicodedata.normalize("NFC", text).splitlines()
+    for index, line in enumerate(lines):
         line = compact(line)
         matches = list(FOLDED_LABEL_RE.finditer(fold_accents(line)))
         if multiline and line and not matches and values and values[-1][0] in {"seller", "buyer", "address", "bank"}:
@@ -61,7 +62,12 @@ def label_values(text: str, multiline: bool = False) -> list[tuple[str, str]]:
                 values[-1] = (label, compact(previous + " " + line))
         for i, match in enumerate(matches):
             end = matches[i + 1].start() if i + 1 < len(matches) else len(line)
-            values.append((match.lastgroup, compact(line[match.end():end])))
+            value = compact(line[match.end():end])
+            if not value and i == len(matches) - 1:
+                value = next((compact(row) for row in lines[index + 1:] if compact(row)), "")
+                if FOLDED_LABEL_RE.search(fold_accents(value)):
+                    value = ""
+            values.append((match.lastgroup, value))
     return values
 
 
