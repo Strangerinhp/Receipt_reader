@@ -59,7 +59,8 @@ def label_values(text: str, multiline: bool = False) -> list[tuple[str, str]]:
         if multiline and line and not matches and values and values[-1][0] in {"seller", "buyer", "address", "bank"}:
             if not re.search(r":|HÓA ĐƠN|Ngày |Người |Ghi chú|STT", line, re.I):
                 label, previous = values[-1]
-                values[-1] = (label, compact(previous + " " + line))
+                if not previous.endswith(line):
+                    values[-1] = (label, compact(previous + " " + line))
         for i, match in enumerate(matches):
             end = matches[i + 1].start() if i + 1 < len(matches) else len(line)
             value = compact(line[match.end():end])
