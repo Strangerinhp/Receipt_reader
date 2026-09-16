@@ -290,8 +290,6 @@ def _finish(texts, tables, warnings, ocr_used):
         amount = decimal_value(items[0]["ThTien"])
         if amount is not None and amount == decimal_value(totals["TgTCThue"]):
             items[0]["TThue"] = totals["TgTThue"]
-            items[0]["TTKhac"].append({"TTruong": "Nguồn tiền thuế dòng", "KDLieu": "string",
-                                      "DLieu": "Tổng thuế hóa đơn chỉ có một dòng hàng và thành tiền khớp tổng trước thuế"})
     if not document["NDHDon"]["DSHHDVu"] and text:
         warnings.append("Chưa nhận diện được dòng hàng trong bảng; cần kiểm tra và bổ sung từ file gốc.")
     warnings.extend(validate_document(document))
